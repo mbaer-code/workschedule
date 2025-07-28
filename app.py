@@ -1,66 +1,47 @@
-
+# app.py (or a new file like src/database.py if you prefer modularity)
 import os
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
+import psycopg2 # Make sure psycopg2-binary is in your requirements.txt
+from sqlalchemy import create_engine, text # If using SQLAlchemy
 
-app = Flask(__name__)
+def create_app():
+    app = Flask(__name__)
 
-# --- Cloud SQL Configuration ---
-# These will be set as environment variables on Cloud Run from Secret Manager later
-# For local development, you might set dummy values or use a local PostgreSQL for testing
-DB_USER = os.getenv('DB_USER', 'postgres') # Default for simplicity, change later for your specific DB user
-DB_PASS = os.getenv('DB_PASS', 'your_local_dev_password') # Use a dummy for local dev
-DB_NAME = os.getenv('DB_NAME', 'my_database') # Default for local, change for your specific DB name
-# This comes from the Cloud SQL instance connection name (e.g., project-id:region:instance-id)
-CLOUD_SQL_CONNECTION_NAME = os.getenv('CLOUD_SQL_CONNECTION_NAME', 'your-local-connection-name') # Dummy for local
+    # --- Database Configuration ---
+    # Get database connection details from environment variables
+    db_user = os.environ.get("DB_USER")
+    db_pass = os.environ.get("DB_PASS")
+    db_name = os.environ.get("DB_NAME")
+    # THIS IS THE CRITICAL LINE: Ensure it reads from INSTANCE_CONNECTION_NAME
+    instance_connection_name = os.environ.get("INSTANCE_CONNECTION_NAME")
 
-# Determine connection string based on environment
-if os.getenv('K_SERVICE'): # This env var is set by Cloud Run for its services
-    # Unix socket connection for Cloud Run
-    DB_URI = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@/{DB_NAME}?host=/cloudsql/{CLOUD_SQL_CONNECTION_NAME}"
-else:
-    # Local connection for development (adjust if you use a local PostgreSQL server)
-    # For quick local testing without a local PG server, you can temporarily comment out DB parts
-    # or use SQLite: app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
-    # If you want to test local Postgres, ensure it's running and accessible at localhost:5432
-    DB_URI = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@localhost:5432/{DB_NAME}"
+    # Construct the database URI for Cloud SQL
+    # The Cloud SQL Proxy creates a Unix socket at /cloudsql/INSTANCE_CONNECTION_NAME
+    db_uri = f"postgresql://{db_user}:{db_pass}@/{db_name}?host=/cloudsql/{instance_connection_name}"
 
+    # Store db_uri in app config for later use
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False # Suppress warning
 
-app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Suppress warning
+    # Example: Simple route to test database connection
+    @app.route('/')
+    def hello_world():
+        try:
+            # Attempt to connect to the database
+            conn = psycopg2.connect(db_uri)
+            cursor = conn.cursor()
+            cursor.execute("SELECT version();") # Simple query to test connection
+            db_version = cursor.fetchone()[0]
+            conn.close()
+            return f"Hello, World! Your Flask app is running. Database connected successfully! PostgreSQL version: {db_version}"
+        except Exception as e:
+            # Return the actual error message for debugging
+            return f"Hello, World! Your Flask app is running. Database connection error: {e}"
 
-db = SQLAlchemy(app)
+    return app
 
-# --- Basic User Table Schema ---
-class User(db.Model):
-    id = db.Column(db.String(128), primary_key=True) # Firebase UID will go here
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    # Add more fields later: subscription_status, prompt_frequency, etc.
-
-    def __repr__(self):
-        return f'<User {self.email}>'
-
-# --- Flask Routes ---
-@app.route('/')
-def hello_world():
-    # Test database connection (optional, for debugging)
-    db_status = "Database not initialized or connected locally yet."
-    try:
-        # This line will try to query the User table. It will fail if the table doesn't exist.
-        user_count = db.session.query(User).count()
-        db_status = f"Database connected. User count: {user_count}"
-    except Exception as e:
-        # Catch specific errors for missing table or general connection issues
-        if "relation \"user\" does not exist" in str(e) or "no such table" in str(e) or "Table 'user' doesn't exist" in str(e):
-            db_status = "Database connected, 'user' table not yet created. Run db.create_all() locally."
-        else:
-            db_status = f"Database connection error: {e}"
-
-    return f'Hello, World! Your Flask app is running. {db_status}'
-
-# This block only runs when you execute app.py directly (e.g., for local dev)
-# Gunicorn will be used when deployed to Cloud Run.
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(debug=True, host='0.0.0.0', port=port)
+# If you're running app.py directly (not via wsgi.py and create_app()):
+# app = create_app()
+# if __name__ == '__main__':
+#     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
