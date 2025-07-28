@@ -27,10 +27,11 @@ RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_VERSI
 
 # Define the entrypoint for the container
 # This will run the Cloud SQL Proxy in the background and then start Gunicorn
+# Explicitly calling gunicorn as a Python module to ensure it's found.
 # The Cloud SQL Proxy listens on a Unix socket by default, which is what Flask/psycopg2 expect
 # The INSTANCE_CONNECTION_NAME environment variable is read by the proxy
 # The PORT environment variable is automatically provided by Cloud Run
-CMD ["sh", "-c", "cloud_sql_proxy -instances=${INSTANCE_CONNECTION_NAME}=unix:/cloudsql & gunicorn --bind 0.0.0.0:${PORT} app:app"]
+CMD ["sh", "-c", "cloud_sql_proxy -instances=${INSTANCE_CONNECTION_NAME}=unix:/cloudsql & python -m gunicorn --bind 0.0.0.0:${PORT} app:app"]
 
 # Expose the port that the application will listen on
 EXPOSE 8080
