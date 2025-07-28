@@ -1,4 +1,4 @@
-# app.py (or a new file like src/database.py if you prefer modularity)
+# app.py (This file now directly exposes the Flask app for Gunicorn)
 import os
 from flask import Flask
 import psycopg2 # Make sure psycopg2-binary is in your requirements.txt
@@ -40,8 +40,12 @@ def create_app():
 
     return app
 
-# If you're running app.py directly (not via wsgi.py and create_app()):
-# app = create_app()
+# IMPORTANT: Gunicorn (used by Cloud Run) will look for a top-level 'app' object.
+# By calling create_app() here, we expose the Flask application directly.
+app = create_app()
+
+# The if __name__ == '__main__': block is typically for local development
+# and is not needed when running with Gunicorn on Cloud Run.
 # if __name__ == '__main__':
 #     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
