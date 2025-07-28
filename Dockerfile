@@ -12,10 +12,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your application code
 COPY . .
 
+# Install wget, which is needed to download the Cloud SQL Proxy
+# The -y flag automatically answers yes to prompts
+RUN apt-get update && apt-get install -y wget
+
 # Download and install the Cloud SQL Proxy
 # Use the latest stable version for your architecture (linux amd64 is common for Cloud Run)
 ENV CLOUD_SQL_PROXY_VERSION 1.33.0 # Check https://github.com/GoogleCloudPlatform/cloud-sql-proxy/releases for latest
-RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_VERSION}/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
+RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_PROXY_VERSION}/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
     && chmod +x /usr/local/bin/cloud_sql_proxy
 
 # Define the entrypoint for the container
