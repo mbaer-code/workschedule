@@ -17,11 +17,13 @@ COPY . .
 # The -y flag automatically answers yes to prompts
 RUN apt-get update && apt-get install -y wget
 
+# Set the Cloud SQL Proxy version.
+# Check https://github.com/GoogleCloudPlatform/cloud-sql-proxy/releases for latest
+ENV CLOUD_SQL_PROXY_VERSION 1.33.0
+
 # Download and install the Cloud SQL Proxy
-# Use the latest stable version for your architecture (linux amd64 is common for Cloud Run)
-ENV CLOUD_SQL_PROXY_VERSION 1.33.0 # Check https://github.com/GoogleCloudPlatform/cloud-sql-proxy/releases for latest
-RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_VERSION}/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
-    && chmod +x /usr/local/bin/cloud_sql_proxy
+# Ensure the entire wget command is on a single line to avoid parsing issues.
+RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_VERSION}/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy && chmod +x /usr/local/bin/cloud_sql_proxy
 
 # Define the entrypoint for the container
 # This will run the Cloud SQL Proxy in the background and then start Gunicorn
