@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y wget
 ENV CLOUD_SQL_PROXY_VERSION 1.33.0
 
 # Download and install the Cloud SQL Proxy
-# Ensure the entire wget command is on a single line to avoid parsing issues.
+# Corrected the environment variable name from CLOUD_SQL_PROXY_PROXY_VERSION to CLOUD_SQL_PROXY_VERSION
 RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_VERSION}/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy && chmod +x /usr/local/bin/cloud_sql_proxy
 
 # Define the entrypoint for the container
