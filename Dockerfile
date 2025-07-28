@@ -1,5 +1,6 @@
 # Use the official Python image as a base image
-FROM python:3.10-slim-buster
+# Changed from 'buster' to 'bullseye' as buster repositories are no longer directly accessible.
+FROM python:3.10-slim-bullseye
 
 # Set the working directory in the container
 WORKDIR /app
@@ -19,7 +20,7 @@ RUN apt-get update && apt-get install -y wget
 # Download and install the Cloud SQL Proxy
 # Use the latest stable version for your architecture (linux amd64 is common for Cloud Run)
 ENV CLOUD_SQL_PROXY_VERSION 1.33.0 # Check https://github.com/GoogleCloudPlatform/cloud-sql-proxy/releases for latest
-RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_PROXY_VERSION}/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
+RUN wget https://storage.googleapis.com/cloud-sql-proxy/v${CLOUD_SQL_PROXY_VERSION}/cloud-sql-proxy.linux.amd64 -O /usr/local/bin/cloud_sql_proxy \
     && chmod +x /usr/local/bin/cloud_sql_proxy
 
 # Define the entrypoint for the container
