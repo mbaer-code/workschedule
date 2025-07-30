@@ -13,3 +13,18 @@ token.json
 junk
 dist
 build
+# Python virtual environment
+venv/
+
+# Local environment variables (DO NOT COMMIT)
+.env
+
+# Python build artifacts and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Instance-specific configuration
+instance/*
+!instance/.gitkeep
