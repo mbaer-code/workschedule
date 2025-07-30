@@ -1,8 +1,8 @@
 // workschedule-cloud/src/static/js/firebase_auth.js
 
-// 1. Your Firebase Project Configuration (PASTE YOURS HERE)
+// 1. Your Firebase Project Configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBIGGseFMifZwPk6RFuqs2ID7bKKASKF0w", // <--- Make sure this is YOUR actual API key
+  apiKey: "AIzaSyBIGGseFMifZwPk6RFuqs2ID7bKKASKF0w", 
   authDomain: "work-schedule-cloud-36477.firebaseapp.com",
   projectId: "work-schedule-cloud-36477",
   storageBucket: "work-schedule-cloud-36477.firebasestorage.app",
@@ -31,6 +31,46 @@ function showMessage(message, isError = false) {
     }
 }
 
+// Helper to send Firebase ID token to Flask backend to establish server-side session
+async function sendTokenToBackend(user, redirectUrl) {
+    console.log("sendTokenToBackend: Attempting to send token to Flask."); // NEW LOG
+    try {
+        const idToken = await user.getIdToken(); // Get the Firebase ID Token
+        console.log("sendTokenToBackend: Got ID Token from Firebase user."); // NEW LOG
+        
+        // Send the ID token to our new Flask endpoint
+        const response = await fetch('/authenticate-session', { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // We send the ID token in the Authorization header as a Bearer token
+                'Authorization': `Bearer ${idToken}` 
+            },
+            // No body needed as the token is in the header
+            body: JSON.stringify({}) 
+        });
+
+        console.log("sendTokenToBackend: Fetch request sent. Checking response..."); // NEW LOG
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log("sendTokenToBackend: Flask responded with OK. Data:", data); // NEW LOG
+            showMessage('Login successful! Redirecting...', false);
+            setTimeout(() => {
+                window.location.href = redirectUrl; // Redirect after successful session setup
+            }, 1000); // 1 second delay
+        } else {
+            // Handle errors from the Flask backend (e.g., token verification failed)
+            const errorData = await response.json();
+            console.error("sendTokenToBackend: Flask responded with an error:", response.status, errorData); // NEW LOG
+            throw new Error(errorData.error || `Flask backend error: ${response.status}`);
+        }
+    } catch (error) {
+        console.error("sendTokenToBackend: Network or unexpected error during fetch:", error); // NEW LOG
+        showMessage(`Error during login/signup: ${error.message}`, true);
+    }
+}
+
 
 // --- Sign Up Logic ---
 const signupForm = document.getElementById('signupForm');
@@ -48,19 +88,16 @@ if (signupForm) { // Only run if signup form exists on the page
         }
 
         try {
-            // Create user with email and password
+            // Create user with email and password using Firebase
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
             console.log('User signed up:', userCredential.user.email, userCredential.user.uid);
-            showMessage('Sign up successful! Redirecting to login...', false);
-
-            // Redirect after a short delay for message visibility
-            setTimeout(() => {
-                window.location.href = '/login'; // Redirect to login page
-            }, 1500); // 1.5 second delay
+            
+            // On successful signup, automatically log them in by sending token to backend
+            await sendTokenToBackend(userCredential.user, '/dashboard'); 
 
         } catch (error) {
             console.error('Sign up error:', error.message);
-            // Display Firebase-specific error messages
+            // Display Firebase-specific error messages to the user
             let errorMessage = "An unknown error occurred during signup.";
             switch (error.code) {
                 case 'auth/email-already-in-use':
@@ -93,19 +130,16 @@ if (loginForm) { // Only run if login form exists on the page
         const password = loginForm['loginPassword'].value;
 
         try {
-            // Sign in user with email and password
+            // Sign in user with email and password using Firebase
             const userCredential = await auth.signInWithEmailAndPassword(email, password);
             console.log('User logged in:', userCredential.user.email, userCredential.user.uid);
-            showMessage('Login successful! Redirecting...', false);
-
-            // Redirect after a short delay for message visibility
-            setTimeout(() => {
-                window.location.href = '/dashboard'; // Redirect to a dashboard/home page (next step!)
-            }, 1500); // 1.5 second delay
+            
+            // On successful login, send token to Flask backend to establish server-side session
+            await sendTokenToBackend(userCredential.user, '/dashboard'); 
 
         } catch (error) {
             console.error('Login error:', error.message);
-            // Display Firebase-specific error messages
+            // Display Firebase-specific error messages to the user
             let errorMessage = "An unknown error occurred during login.";
             switch (error.code) {
                 case 'auth/invalid-email':
@@ -126,22 +160,56 @@ if (loginForm) { // Only run if login form exists on the page
     });
 }
 
+// --- Logout Logic ---
+const logoutLink = document.getElementById('logoutLink'); // Assumes logout link has this ID
+if (logoutLink) {
+    logoutLink.addEventListener('click', async (e) => {
+        e.preventDefault(); // Prevent default link behavior (don't navigate immediately)
+
+        try {
+            await auth.signOut(); // Sign out from Firebase client-side
+            
+            // Also inform the Flask backend to clear its session via a POST request
+            const response = await fetch('/logout', { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json' // Even if no body, good practice
+                },
+                body: JSON.stringify({}) // Send an empty JSON body
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to clear server session.");
+            }
+
+            console.log("User signed out successfully.");
+            showMessage('You have been logged out.', false);
+            
+            // Redirect to the login page after successful client-side and server-side logout
+            setTimeout(() => {
+                window.location.href = '/login'; 
+            }, 1000); // 1 second delay
+
+        } catch (error) {
+            console.error("Logout error:", error.message);
+            showMessage(`Logout error: ${error.message}`, true);
+        }
+    });
+}
+
 // --- Basic Auth State Observer (Good practice for tracking user status) ---
+// This listener runs whenever the user's sign-in state changes (e.g., login, logout)
 auth.onAuthStateChanged((user) => {
     if (user) {
         // User is signed in.
-        console.log("Auth state changed: User is signed in:", user.email, user.uid);
-        // You might want to redirect authenticated users away from login/signup pages
-        // if they try to access them directly while already logged in.
-        // if (window.location.pathname === '/' || window.location.pathname === '/login' || window.location.pathname === '/signup') {
-        //      // window.location.href = '/dashboard'; // Uncomment if you want immediate redirect
-        // }
+        console.log("Auth state changed: User is signed in.", user.email, user.uid);
+        // In a more complex app, you might use this to update UI elements
+        // or redirect if they are on auth pages while already logged in.
     } else {
         // User is signed out.
         console.log("Auth state changed: User is signed out.");
-        // If they are on a protected page and logged out, you might redirect them to login.
-        // if (window.location.pathname === '/dashboard') { // Example: If on dashboard, redirect to login
-        //     // window.location.href = '/login';
-        // }
+        // Similar to above, you could redirect from protected pages if not logged in
+        // but our Flask `login_required` decorator handles this for server-rendered pages.
     }
 });

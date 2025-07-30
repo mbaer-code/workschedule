@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Your Dashboard!</h1>
+        
+        <!-- Flash messages display area -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <ul class="flashes">
+            {% for category, message in messages %}
+              <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+
+        <!-- Message display area (for JS messages) -->
+        <p id="authMessage" class="message"></p>
+
+        {% if user_id %}
+            <p>You are successfully logged in as: <strong>{{ user_id }}</strong></p>
+            <p>This ID comes from your Flask session, confirming server-side authentication.</p>
+        {% else %}
+            <p>You are logged in, but your user ID could not be retrieved from the session.</p>
+        {% endif %}
+        
+        <!-- The logout link with the ID expected by firebase_auth.js -->
+        <p><a href="#" id="logoutLink">Logout</a></p>
+    </div>
+
+    <!-- Firebase SDKs - These are needed for client-side logout -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-analytics.js"></script>
+    
+    <!-- Your custom JavaScript for Firebase authentication (handles logout now) -->
+    <script src="{{ url_for('static', filename='js/firebase_auth.js') }}"></script>
+    <!-- Assuming you also have a main.js if needed -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
+
