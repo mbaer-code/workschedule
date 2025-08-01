@@ -1,7 +1,9 @@
 
 
 Flask
+Flask-Migrate
 gunicorn
 Flask-SQLAlchemy
 psycopg2-binary
 python-dotenv
+firebase-admin
