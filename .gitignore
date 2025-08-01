@@ -1,6 +1,7 @@
 error_log.txt
 __pycache__
 calendar/
+venv
 *.venv
 *.egg-info
 *.pyc
@@ -13,11 +14,16 @@ token.json
 junk
 dist
 build
+
 # Python virtual environment
 venv/
 
 # Local environment variables (DO NOT COMMIT)
 .env
+
+
+# Local git repo (DO NOT COMMIT)
+.git
 
 # Python build artifacts and cache
 __pycache__/
@@ -28,3 +34,7 @@ __pycache__/
 # Instance-specific configuration
 instance/*
 !instance/.gitkeep
+
+aggregated_text_content.txt
+
+cloud-sql-proxy.x64.exe
