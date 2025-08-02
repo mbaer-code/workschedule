@@ -1,13 +1,14 @@
 # Ignores for Python environments and build artifacts
 __pycache__/
-venv/
-*.venv/
+/venv
+./.venv
+*.venv
 *.pyc
 *.pyo
 *.pyd
-*.egg-info/
-dist/
-build/
+*.egg-info
+dist
+build
 *.so
 
 # IDE and OS-specific files
@@ -35,4 +36,6 @@ error_log.txt
 junk
 *.swp
 *.out
+.git
+gemini_payload.json
 
