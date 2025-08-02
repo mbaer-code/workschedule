@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# This script cats the content of a file to the system clipboard.
+# It automatically detects the correct clipboard utility based on its availability.
+#
+# To use this as a persistent runtime tool:
+# 1. Save this script to a file, e.g., 'cat2clip'.
+# 2. Make the file executable: chmod +x cat2clip
+# 3. Move the file to a directory in your PATH, such as /usr/local/bin or ~/bin.
+#
+# Usage: cat2clip <filename>
+
+# Use 'pipefail' to ensure the script fails if any command in a pipeline fails.
+set -o pipefail
+
+# Check if a filename was provided as an argument.
+if [ -z "$1" ]; then
+  echo "Error: No filename provided." >&2
+  echo "Usage: cat2clip <filename>" >&2
+  exit 1
+fi
+
+# Check if the file exists.
+if [ ! -f "$1" ]; then
+  echo "Error: File not found - '$1'" >&2
+  exit 1
+fi
+
+# Determine the correct clipboard command by checking for its availability.
+# This is a more robust method than checking the operating system name.
+clipboard_cmd=""
+if command -v clip &> /dev/null; then
+  # For Git Bash on Windows, use the native 'clip' command.
+  clipboard_cmd="clip"
+elif command -v pbcopy &> /dev/null; then
+  # For macOS, use the built-in 'pbcopy' command.
+  clipboard_cmd="pbcopy"
+elif command -v xclip &> /dev/null; then
+  # For Linux, use 'xclip'.
+  clipboard_cmd="xclip -selection c"
+else
+  echo "Error: No clipboard utility found (clip, pbcopy, or xclip)." >&2
+  echo "Please ensure you have one of these installed and available in your PATH." >&2
+  exit 1
+fi
+
+# Cat the file and pipe it to the appropriate clipboard command.
+if ! cat "$1" | $clipboard_cmd; then
+  echo "Error: Failed to copy content to clipboard using '$clipboard_cmd'." >&2
+  exit 1
+fi
+
+echo "Content of '$1' copied to clipboard."
+
+
