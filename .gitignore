@@ -16,6 +16,7 @@ build
 .idea/
 .DS_Store
 Thumbs.db
+junk*
 
 # Local environment variables and sensitive files
 .env
