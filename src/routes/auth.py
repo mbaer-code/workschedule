@@ -4,16 +4,13 @@
 import os
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, flash
 from functools import wraps
-
 # --- Firebase Admin SDK Imports ---
-# NOTE: The Firebase Admin SDK initialization logic has been moved to app.py
-# to ensure it's initialized only once when the application starts.
 import firebase_admin
 from firebase_admin import credentials, auth
 
 # Create a Blueprint for authentication with a URL prefix
+# This Blueprint does NOT call create_app() or create a Flask app instance.
 auth_bp = Blueprint('auth_bp', __name__, url_prefix='/auth')
-# --- NEW DEBUG STATEMENT ---
 print("DEBUG: auth.py blueprint created and loaded.")
 # -----------------------------
 
@@ -86,4 +83,3 @@ def logout():
     session.pop('user_id', None)
     flash('You have been logged out.', 'success')
     return redirect(url_for('auth_bp.login_page'))
-
