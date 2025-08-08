@@ -8,6 +8,10 @@ from flask_migrate import Migrate
 from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 
+# --- Firebase Admin SDK Imports ---
+import firebase_admin
+from firebase_admin import credentials
+
 # Load environment variables at the very beginning
 load_dotenv()
 print("DEBUG: .env file loaded.")
@@ -15,6 +19,39 @@ print("DEBUG: .env file loaded.")
 # --- Initialize Extensions outside create_app for CLI visibility ---
 db = SQLAlchemy()
 migrate = Migrate()
+
+# --- Initialize Firebase Admin SDK once ---
+# Check if a Firebase app is already initialized to prevent issues with Flask's debug reloader.
+try:
+    if not firebase_admin._apps:
+        # Determine credentials based on environment
+        if os.environ.get("K_SERVICE"):
+            # This is for running on Cloud Run, which uses ApplicationDefault credentials.
+            cred = credentials.ApplicationDefault()
+            print("DEBUG: Using ApplicationDefault credentials for Cloud Run.")
+        else:
+            # This is for local development. You must provide the path to your
+            # Firebase service account key JSON file in an environment variable.
+            key_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY")
+            if not key_path or not os.path.exists(key_path):
+                print(
+                    "ERROR: FIREBASE_SERVICE_ACCOUNT_KEY environment variable not set or file does not exist.",
+                    file=sys.stderr
+                )
+                print("HINT: On local machines, you must provide a service account key file for Firebase Admin SDK.", file=sys.stderr)
+                sys.exit(1)
+            
+            cred = credentials.Certificate(key_path)
+            print(f"DEBUG: Using service account key from {key_path}")
+
+        firebase_admin.initialize_app(cred)
+        print("DEBUG: Firebase Admin SDK initialized successfully.")
+    else:
+        print("DEBUG: Firebase Admin SDK was already initialized.")
+except Exception as e:
+    print(f"ERROR: Failed to initialize Firebase Admin SDK: {e}", file=sys.stderr)
+    sys.exit(1)
+
 
 print("DEBUG: Extensions initialized.")
 
@@ -64,19 +101,11 @@ def create_app():
         sys.exit(1)
     
     # --- Register Blueprints ---
-    # The fix for the circular import is to move these imports inside the factory function.
     print("DEBUG: Attempting to import blueprints...")
     from src.routes.schedule import schedule_bp
     from src.routes.auth import auth_bp
     print("DEBUG: Blueprints imported successfully.")
     
-    # --- IMPORTANT NOTE ---
-    # The traceback indicates the circular import is caused by a call to `create_app()`
-    # from within `src/routes/auth.py`. To fix this, you must remove that call from
-    # the auth.py file. Blueprints should not create the application instance.
-    # ----------------------
-    
-    # We now register both the schedule and auth blueprints.
     app.register_blueprint(schedule_bp)
     app.register_blueprint(auth_bp)
 
@@ -91,3 +120,5 @@ def create_app():
 app = create_app()
 
 print("DEBUG: App factory finished. App instance created.")
+
+

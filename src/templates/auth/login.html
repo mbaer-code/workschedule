@@ -3,30 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Work Schedule Cloud</title>
+    <title>Login</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <!-- Load Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-    <script src="{{ url_for('static', filename='js/firebase_init.js') }}"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Login</h1>
-        <form id="login-form">
+    <div class="auth-container">
+        <h1 class="auth-title">Log In</h1>
+        <form class="auth-form" data-form-type="login" method="POST">
+            <div id="messageBox" class="message-box" style="display: none;"></div>
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" required>
+                <input type="email" id="email" name="email" required>
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" required>
+                <input type="password" id="password" name="password" required>
             </div>
-            <button type="submit">Log In</button>
+            <button type="submit" class="auth-button">Log In</button>
         </form>
-        <p>Don't have an account? <a href="{{ url_for('auth_bp.signup_page') }}">Sign Up</a></p>
+        <p class="auth-link">Don't have an account? <a href="{{ url_for('auth_bp.signup_page') }}">Sign Up</a></p>
     </div>
-    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/firebase_auth.js') }}"></script>
 </body>
 </html>
 

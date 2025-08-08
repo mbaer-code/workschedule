@@ -83,3 +83,28 @@ def logout():
     session.pop('user_id', None)
     flash('You have been logged out.', 'success')
     return redirect(url_for('auth_bp.login_page'))
+
+# --- NEW: Basic dashboard page for logged-in users ---
+@auth_bp.route('/dashboard')
+@login_required
+def dashboard_page():
+    return render_template('dashboard.html')
+
+# --- NEW: Route to test Secret Manager variables ---
+@auth_bp.route('/test-secrets')
+@login_required
+def test_secrets():
+    # Retrieve secrets from environment variables
+    email_api_key = os.getenv('EMAIL_SERVICE_API_KEY')
+    stripe_secret_key = os.getenv('STRIPE_SECRET_KEY')
+    
+    return jsonify({
+        "status": "success",
+        "message": "Secrets retrieved from environment variables.",
+        "secrets": {
+            "EMAIL_SERVICE_API_KEY": email_api_key,
+            "STRIPE_SECRET_KEY": stripe_secret_key
+        }
+    })
+
+
