@@ -1,4 +1,8 @@
-# workschedule-cloud/src/__init__.py
-# A blank file to mark 'src' as a Python package.
-# All application initialization logic has been moved to app.py.
-from app import create_app
+# src/__init__.py
+
+from flask import Flask
+
+def create_app():
+    app = Flask(__name__)
+    # ... other app setup
+    return app
