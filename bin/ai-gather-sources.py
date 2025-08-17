@@ -6,23 +6,11 @@ import time
 
 def gather_project_files(output_filename, verbose=False):
     """
-    Gathers all version-controlled files from the current Git repository
-    into a JSON object with metadata.
+    Gathers all relevant project files from the current directory
+    into a JSON object for AI analysis.
     """
-    try:
-        # Get a list of all version-controlled files, respecting .gitignore
-        git_command = ['git', 'ls-files']
-        result = subprocess.run(git_command, capture_output=True, text=True, check=True)
-        file_list = result.stdout.strip().split('\n')
-        # Filter out empty strings that might result from the split
-        file_list = [f for f in file_list if f]
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error: Not a Git repository or git command failed. {e.stderr}")
-        return
-
     # List of file extensions, files, and directories to ignore for AI analysis
-    # This is in addition to .gitignore rules
+    # This list is manually maintained.
     IGNORE_EXTENSIONS = {
         '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp',
         '.bin', '.lock', '.log', '.zip', '.tar', '.gz', '.rar',
@@ -31,11 +19,11 @@ def gather_project_files(output_filename, verbose=False):
     }
 
     IGNORE_DIRECTORIES = {
-        '.git', '__pycache__', 'node_modules', 'venv', 'env', 'dist', 'build'
+        '.git', '__pycache__', 'node_modules', 'venv', 'env', 'dist', 'build', 'bin', 'instance'
     }
 
     IGNORE_FILES = {
-        'LICENSE', 'README.md', 'CONTRIBUTING.md'
+        'LICENSE', 'README.md', 'CONTRIBUTING.md', 'gemini_payload.json', 'ai_backup'
     }
 
     project_data = {
@@ -47,31 +35,35 @@ def gather_project_files(output_filename, verbose=False):
         "files": []
     }
 
-    print(f"Scanning {len(file_list)} version-controlled files...")
+    file_list = []
+    for root, dirs, files in os.walk('.'):
+        # Remove ignored directories from the traversal
+        dirs[:] = [d for d in dirs if d not in IGNORE_DIRECTORIES]
+
+        for file_name in files:
+            file_path = os.path.join(root, file_name)
+            file_list.append(file_path)
+
+    print(f"Scanning {len(file_list)} files in the project directory...")
 
     processed_count = 0
     for file_path in file_list:
         processed_count += 1
-        
+
         # Simple progress indicator
         if verbose and processed_count % 50 == 0:
             print(f"Processed {processed_count}/{len(file_list)} files...")
-        
-        if not os.path.isfile(file_path):
-            continue
 
-        # Check for ignored directories, extensions, and files
-        if any(d in file_path.split(os.sep) for d in IGNORE_DIRECTORIES):
+        # Check for ignored files and extensions
+        if os.path.basename(file_path) in IGNORE_FILES:
             continue
         if any(file_path.endswith(ext) for ext in IGNORE_EXTENSIONS):
-            continue
-        if os.path.basename(file_path) in IGNORE_FILES:
             continue
 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            
+
             file_entry = {
                 "file_path": file_path,
                 "status": "unchanged",
@@ -94,11 +86,11 @@ def gather_project_files(output_filename, verbose=False):
     print(f"\nSuccessfully created '{output_filename}' with project data.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Gathers project files from a Git repository for AI analysis.")
+    parser = argparse.ArgumentParser(description="Gathers project files for AI analysis.")
     parser.add_argument(
-        "output_file", 
-        nargs='?', 
-        default="gemini_payload.json", 
+        "output_file",
+        nargs='?',
+        default="gemini_payload.json",
         help="Path to the output JSON file. Defaults to gemini_payload.json."
     )
     parser.add_argument(
@@ -118,6 +110,5 @@ if __name__ == "__main__":
         base, ext = os.path.splitext(output_file)
         timestamp_str = str(int(time.time()))
         output_file = f"{base}_{timestamp_str}{ext}"
-    
-    gather_project_files(output_file, verbose=args.verbose)
 
+    gather_project_files(output_file, verbose=args.verbose)
