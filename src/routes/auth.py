@@ -7,15 +7,47 @@ from functools import wraps
 # --- Firebase Admin SDK Imports ---
 import firebase_admin
 from firebase_admin import credentials, auth
+from firebase_admin import exceptions
 
-# Create a Blueprint for authentication with a URL prefix
-# This Blueprint does NOT call create_app() or create a Flask app instance.
+# A blueprint is an object that records operations to be applied to a Flask app.
+# It is used here to group related authentication routes.
 auth_bp = Blueprint('auth_bp', __name__, url_prefix='/auth')
 print("DEBUG: auth.py blueprint created and loaded.")
 # -----------------------------
 
+# --- Initialize Firebase Admin SDK if not already initialized ---
+# This check is crucial for handling the app factory pattern.
+# We ensure the SDK is initialized before any functions in this blueprint
+# attempt to use it, preventing the 'default Firebase app does not exist' error.
+# The credentials file should be in the root directory and excluded from git.
+if not firebase_admin._apps:
+    print("DEBUG: Initializing Firebase Admin SDK from auth.py.")
+    
+    # Load the Firebase service account key from an environment variable.
+    # We check for a common naming convention, and then a more specific one.
+    service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH') or os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH')
+
+    if not service_account_path:
+        print("ERROR: FIREBASE_SERVICE_ACCOUNT_PATH not set.")
+        # This will need to be configured for local and cloud run.
+        # Fallback to a hardcoded path for local testing
+        try:
+            cred = credentials.Certificate('instance/work-schedule-cloud-36477-firebase-adminsdk-fbsvc-08527b1d8d.json')
+            firebase_admin.initialize_app(cred)
+            print("DEBUG: Firebase Admin SDK initialized successfully with fallback.")
+        except Exception as e:
+            print(f"ERROR: Failed to initialize Firebase Admin SDK: {e}")
+    else:
+        try:
+            cred = credentials.Certificate(service_account_path)
+            firebase_admin.initialize_app(cred)
+            print("DEBUG: Firebase Admin SDK initialized successfully.")
+        except Exception as e:
+            print(f"ERROR: Failed to initialize Firebase Admin SDK with service account path: {e}")
+            # Consider raising an exception or handling this more gracefully.
+
 # --- Login Required Decorator ---
-# This decorator will protect routes, ensuring a user is logged in
+# This decorator protects routes, ensuring a user is logged in
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -48,11 +80,12 @@ def authenticate_session():
         return jsonify({'error': 'No Firebase ID token provided.'}), 401
 
     id_token = auth_header.split('Bearer ')[1]
-    print(f"Extracted ID Token (first 20 chars): {id_token[:20]}...") # DEBUG
+    print(f"Extracted ID Token: {id_token}") # DEBUG: Print full token for inspection
 
     try:
-        # Verify the ID token using the Firebase Admin SDK
-        decoded_token = auth.verify_id_token(id_token)
+        # Verify the ID token using the Firebase Admin SDK with a clock skew tolerance
+        # The maximum allowed value for clock_skew_seconds is 60.
+        decoded_token = auth.verify_id_token(id_token, clock_skew_seconds=60)
         uid = decoded_token['uid']
 
         print(f"Firebase ID Token successfully verified for UID: {uid}") # DEBUG
@@ -64,9 +97,11 @@ def authenticate_session():
         return jsonify({'message': 'Session successfully established.'}), 200
 
     except ValueError as e:
-        print(f"ValueError during token processing: {e}") # DEBUG
+        # This typically indicates a malformed token.
+        print(f"ValueError during token processing (malformed token): {e}") # DEBUG
         return jsonify({"error": "Invalid token format"}), 400
-    except auth.AuthError as e:
+    except exceptions.FirebaseError as e:
+        # This handles expired, invalid, or "used too early" tokens
         print(f"Firebase AuthError: {e}") # DEBUG
         return jsonify({"error": "Firebase authentication failed", "details": str(e)}), 401
     except Exception as e:
@@ -106,5 +141,4 @@ def test_secrets():
             "STRIPE_SECRET_KEY": stripe_secret_key
         }
     })
-
 
