@@ -38,5 +38,5 @@ junk
 *.swp
 *.out
 .git
-gemini_payload.json
+*payload*.json
 
