@@ -60,9 +60,9 @@ def create_app():
     Creates and configures the Flask application.
     """
     app = Flask(__name__, static_folder='src/static', template_folder='src/templates')
-    app.secret_key = os.urandom(24)
+    #app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fallback_key")
 
-    print("DEBUG: App object created.")
+    print("DEBUG: App object created. {app.secret_key}")
     
     # --- Database Configuration ---
     db_user = os.environ.get("DB_USER")

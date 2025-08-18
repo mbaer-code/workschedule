@@ -6,7 +6,7 @@ class Config:
     # IMPORTANT: Replace 'your-super-secret-key-replace-in-prod' with a truly random,
     # long string for production deployments. Use environment variables (e.g., Secret Manager)
     # in Cloud Run for SECRET_KEY.
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'a_fallback_secret_key_for_pure_dev_not_prod'
+    FLASK_SECRET_KEY = os.environ.get('FLASK_SECRET_KEY') or 'a_fallback_secret_key_for_pure_dev_not_prod'
 
     # Environment settings
     FLASK_ENV = os.environ.get('FLASK_ENV', 'development')
