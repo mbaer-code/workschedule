@@ -87,10 +87,14 @@ def authenticate_session():
         # The maximum allowed value for clock_skew_seconds is 60.
         decoded_token = auth.verify_id_token(id_token, clock_skew_seconds=60)
         uid = decoded_token['uid']
+        #session['email'] = decoded_token.get('email')
+        #session['name'] = decoded_token.get('name')
 
         print(f"Firebase ID Token successfully verified for UID: {uid}") # DEBUG
         # Set the user ID in the Flask session
         session['user_id'] = uid
+
+
         session.permanent = True # Make the session persistent
         print(f"Flask session 'user_id' set to: {session.get('user_id')}") # DEBUG
 
@@ -123,7 +127,16 @@ def logout():
 @auth_bp.route('/dashboard')
 @login_required
 def dashboard_page():
-    return render_template('dashboard.html')
+
+    user_id = session.get('user_id', '(not found)')
+    email = session.get('email', '(email not found)')
+    name  = session.get('name', '(name not found)')
+
+
+    print("Session at /dashboard:", dict(session))
+    print("user_id at /dashboard:", user_id )
+    return render_template('dashboard.html', user_id=user_id, email=email, name=name )
+
 
 # --- NEW: Route to test Secret Manager variables ---
 @auth_bp.route('/test-secrets')
