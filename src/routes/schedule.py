@@ -2,6 +2,7 @@
 # This file defines the blueprint for schedule-related routes.
 
 import os
+import logging
 from flask import Blueprint, render_template, request, jsonify
 from werkzeug.utils import secure_filename
 
@@ -40,11 +41,11 @@ def upload_pdf():
             temp_path = os.path.join('/tmp', filename)
             file.save(temp_path)
             
-            print(f"File '{filename}' received and saved to a temporary location.")
-            print(f"User email: {request.form.get('email')}, Timezone: {request.form.get('timezone')}")
+            logging.debug(f"File '{filename}' received and saved to a temporary location.")
+            logging.debug(f"User email: {request.form.get('email')}, Timezone: {request.form.get('timezone')}")
             
             # This is the line you'll replace in S6 to process the PDF
-            print("Placeholder: Document AI processing logic will go here.")
+            logging.debug("Placeholder: Document AI processing logic will go here.")
 
             os.remove(temp_path)
 
@@ -52,7 +53,7 @@ def upload_pdf():
 
         except Exception as e:
             # Log the error to Cloud Logging
-            print(f"Error processing upload: {e}")
+            logging.error(f"Error processing upload: {e}")
             return jsonify({'error': 'An unexpected error occurred.'}), 500
     else:
         return jsonify({'error': 'Invalid file type. Please upload a PDF.'}), 400

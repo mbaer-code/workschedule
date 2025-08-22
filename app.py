@@ -6,7 +6,9 @@ from flask import Flask, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.exc import SQLAlchemyError
+
 from dotenv import load_dotenv
+import logging
 
 # --- Firebase Admin SDK Imports ---
 import firebase_admin
@@ -14,7 +16,7 @@ from firebase_admin import credentials
 
 # Load environment variables at the very beginning
 load_dotenv()
-print("DEBUG: .env file loaded.")
+logging.debug(".env file loaded.")
 
 # --- Initialize Extensions outside create_app for CLI visibility ---
 db = SQLAlchemy()
@@ -28,32 +30,28 @@ try:
         if os.environ.get("K_SERVICE"):
             # This is for running on Cloud Run, which uses ApplicationDefault credentials.
             cred = credentials.ApplicationDefault()
-            print("DEBUG: Using ApplicationDefault credentials for Cloud Run.")
+            logging.debug("Using ApplicationDefault credentials for Cloud Run.")
         else:
             # This is for local development. You must provide the path to your
             # Firebase service account key JSON file in an environment variable.
             key_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY")
+            logging.error("key_path: {key_path}.")
             if not key_path or not os.path.exists(key_path):
-                print(
-                    "ERROR: FIREBASE_SERVICE_ACCOUNT_KEY environment variable not set or file does not exist.",
-                    file=sys.stderr
-                )
-                print("HINT: On local machines, you must provide a service account key file for Firebase Admin SDK.", file=sys.stderr)
+                logging.error("FIREBASE_SERVICE_ACCOUNT_KEY environment variable not set or file does not exist.")
+                logging.error("HINT: On local machines, you must provide a service account key file for Firebase Admin SDK.")
                 sys.exit(1)
-            
             cred = credentials.Certificate(key_path)
-            print(f"DEBUG: Using service account key from {key_path}")
-
+            logging.debug(f"Using service account key from {key_path}")
         firebase_admin.initialize_app(cred)
-        print("DEBUG: Firebase Admin SDK initialized successfully.")
+        logging.debug("Firebase Admin SDK initialized successfully.")
     else:
-        print("DEBUG: Firebase Admin SDK was already initialized.")
+        logging.debug("Firebase Admin SDK was already initialized.")
 except Exception as e:
-    print(f"ERROR: Failed to initialize Firebase Admin SDK: {e}", file=sys.stderr)
+    logging.error(f"Failed to initialize Firebase Admin SDK: {e}")
     sys.exit(1)
 
 
-print("DEBUG: Extensions initialized.")
+logging.debug("Extensions initialized.")
 
 def create_app():
     """
@@ -62,7 +60,7 @@ def create_app():
     app = Flask(__name__, static_folder='src/static', template_folder='src/templates')
     #app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fallback_key")
 
-    print("DEBUG: App object created. {app.secret_key}")
+    logging.debug(f"App object created. {app.secret_key}")
     
     # --- Database Configuration ---
     db_user = os.environ.get("DB_USER")
@@ -75,36 +73,36 @@ def create_app():
         # This branch is for running on Cloud Run
         instance_connection_name = os.environ.get("INSTANCE_CONNECTION_NAME")
         if not all([db_user, db_pass, db_name, instance_connection_name]):
-            print("ERROR: Missing one or more database environment variables for Cloud Run.", file=sys.stderr)
+            logging.error("Missing one or more database environment variables for Cloud Run.")
             sys.exit(1)
         db_uri = f"postgresql://{db_user}:{db_pass}@/{db_name}?host=/cloudsql/{instance_connection_name}"
     else:
         # This branch is for local development
         if not all([db_user, db_pass, db_name]):
-            print("ERROR: Missing DB_USER, DB_PASS, or DB_NAME environment variables.", file=sys.stderr)
+            logging.error("Missing DB_USER, DB_PASS, or DB_NAME environment variables.")
             sys.exit(1)
         db_uri = f"postgresql://{db_user}:{db_pass}@127.0.0.1:5432/{db_name}"
 
     app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     
-    print(f"DEBUG: Attempting to connect to database using URI: {db_uri}")
+    logging.debug(f"Attempting to connect to database using URI: {db_uri}")
 
     # Initialize extensions with the app using a try-except block for better error reporting
     try:
         with app.app_context():
             db.init_app(app)
             migrate.init_app(app, db)
-        print("DEBUG: Database connection successful!")
+        logging.debug("Database connection successful!")
     except SQLAlchemyError as e:
-        print(f"ERROR: Failed to connect to the database: {e}", file=sys.stderr)
+        logging.error(f"Failed to connect to the database: {e}")
         sys.exit(1)
     
     # --- Register Blueprints ---
-    print("DEBUG: Attempting to import blueprints...")
+    logging.debug("Attempting to import blueprints...")
     from src.routes.schedule import schedule_bp
     from src.routes.auth import auth_bp
-    print("DEBUG: Blueprints imported successfully.")
+    logging.debug("Blueprints imported successfully.")
     
     app.register_blueprint(schedule_bp)
     app.register_blueprint(auth_bp)
@@ -119,6 +117,6 @@ def create_app():
 # Gunicorn (used by Cloud Run) will look for a top-level 'app' object.
 app = create_app()
 
-print("DEBUG: App factory finished. App instance created.")
+logging.debug("App factory finished. App instance created.")
 
 
