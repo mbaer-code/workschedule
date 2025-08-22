@@ -32,7 +32,7 @@ if not firebase_admin._apps:
         # This will need to be configured for local and cloud run.
         # Fallback to a hardcoded path for local testing
         try:
-            cred = credentials.Certificate('instance/work-schedule-cloud-36477-firebase-adminsdk-fbsvc-08527b1d8d.json')
+            cred = credentials.Certificate('instance/service-account.json')
             firebase_admin.initialize_app(cred)
             print("DEBUG: Firebase Admin SDK initialized successfully with fallback.")
         except Exception as e:

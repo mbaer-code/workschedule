@@ -12,4 +12,6 @@ class User(db.Model):
     ics_feed_token = db.Column(db.String(64), unique=True, nullable=True) 
 
     def __repr__(self):
+        import logging
+        logging.debug(f'User __repr__ called for {self.email} (UID: {self.firebase_uid})')
         return f'<User {self.email} (UID: {self.firebase_uid})>'
