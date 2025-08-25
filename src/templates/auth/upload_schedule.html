@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Schedule</title>
+    <!-- Link to your existing stylesheet for consistent look and feel -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Your Workforce Schedule File</h1>
+        <p>Provide your Google Gmail address, timezone, and the Workforce schedule '.pdf' file you wish to upload.</p>
+        
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <!-- Email Input -->
+            <label for="email">Gmail Address:</label>
+            <input type="email" id="email" name="email" required>
+            
+            <br><br>
+            
+            <!-- Timezone Selection -->
+            <label for="timezone">Your Timezone:</label>
+            <select id="timezone" name="timezone" required>
+                <!-- Include a default option -->
+                <option value="" disabled selected>Select a timezone...</option>
+                <!-- Add common timezones for the user to select from -->
+                <option value="EST">Eastern Time (EST)</option>
+                <option value="CST">Central Time (CST)</option>
+                <option value="MST">Mountain Time (MST)</option>
+                <option value="PST">Pacific Time (PST)</option>
+                <option value="GMT">Greenwich Mean Time (GMT)</option>
+                <option value="JST">Japan Standard Time (JST)</option>
+                <option value="AEST">Australian Eastern Standard Time (AEST)</option>
+            </select>
+            
+            <br><br>
+            
+            <!-- File Upload Input -->
+            <label for="pdfFile">Select PDF File:</label>
+            <input type="file" id="pdfFile" name="pdfFile" accept=".pdf" required>
+            
+            <br><br>
+            
+            <input type="submit" value="Upload Schedule">
+        </form>
+        
+        <br>
+        <p><a href="/auth/dashboard" class="button">Return to Dashboard</a></p>
+        <p><a href="/auth/logout" class="button">Logout</a></p>
+    </div>
+</body>
+</html>
+

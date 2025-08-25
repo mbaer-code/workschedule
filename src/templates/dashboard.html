@@ -31,8 +31,13 @@
             <p>You are logged in, but your user ID could not be retrieved from the session.</p>
         {% endif %}
         
+        <!-- The new link to the PDF upload page -->
+        <p>
+	    <a href="/auth/upload_schedule" class="button">Upload Schedule</a>
+        </p>
+
         <!-- The logout link with the ID expected by firebase_auth.js -->
-        <p><a href="#" id="logoutLink">Logout</a></p>
+	<p><a href="/auth/logout" class="button">Logout</a></p>
     </div>
 
     <!-- Firebase SDKs - These are needed for client-side logout -->
