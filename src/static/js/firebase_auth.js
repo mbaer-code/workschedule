@@ -1,19 +1,21 @@
+console.log("loading firebase_auth.js... ");
+
 // src/static/js/firebase_auth.js
 // This script handles user authentication (signup and login) using Firebase.
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-// Your web app's Firebase configuration
-// These values have been filled in using your project details.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.4.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.4.0/firebase-auth.js";
+
+// config
 const firebaseConfig = {
-   apiKey: "AIzaSyBIGGseFMifZwPk6RFuqs2ID7bKKASKF0w",
-   authDomain: "work-schedule-cloud-36477.firebaseapp.com",
-   projectId: "work-schedule-cloud-36477",
-   storageBucket: "work-schedule-cloud-36477.appspot.com",
-   messagingSenderId: "746093341275",
-   appId: "1:746093341275:web:ec5a54a430991286b16d7e"
+  apiKey: "AIzaSyDxV6dx8ni7JwiOHS1cOtnw-AcoOqpdU-k",
+  authDomain: "work-schedule-cloud.firebaseapp.com",
+  projectId: "work-schedule-cloud",
+  storageBucket: "work-schedule-cloud.firebasestorage.app",
+  messagingSenderId: "985817149812",
+  appId: "1:985817149812:web:93a9079802e681236c7c21",
+  measurementId: "G-B34FNHGKEW"
 };
-
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -26,6 +28,7 @@ const messageBox = document.getElementById('messageBox');
 // Add a submit event listener to the authentication form
 if (authForm) {
     authForm.addEventListener('submit', async (e) => {
+        console.log("Form submit intercepted");
         // Prevent the default form submission which would reload the page
         e.preventDefault();
 
