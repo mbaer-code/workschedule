@@ -1,11 +1,14 @@
-# app.py
 # This file now acts as the application factory and entry point with robust error handling.
 import os
 import sys
-from flask import Flask, redirect, url_for
+
+#from flask import Flask, redirect, url_for
+from flask import Flask, request, redirect, url_for, flash, session, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.exc import SQLAlchemyError
+from google.cloud import storage
+from werkzeug.utils import secure_filename
 
 from dotenv import load_dotenv
 import logging
@@ -35,7 +38,7 @@ try:
             # This is for local development. You must provide the path to your
             # Firebase service account key JSON file in an environment variable.
             key_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY")
-            logging.error("key_path: {key_path}.")
+            logging.error(f"key_path: {key_path}.")
             if not key_path or not os.path.exists(key_path):
                 logging.error("FIREBASE_SERVICE_ACCOUNT_KEY environment variable not set or file does not exist.")
                 logging.error("HINT: On local machines, you must provide a service account key file for Firebase Admin SDK.")
@@ -52,6 +55,16 @@ except Exception as e:
 
 
 logging.debug("Extensions initialized.")
+
+# --- Google Cloud Storage client setup ---
+try:
+    storage_client = storage.Client()
+    GCS_BUCKET_NAME = os.environ.get("FIREBASE_STORAGE_BUCKET", "your-gcs-bucket-name")
+    gcs_bucket = storage_client.bucket(GCS_BUCKET_NAME)
+except Exception as e:
+    logging.error(f"Failed to initialize Google Cloud Storage client: {e}")
+    storage_client = None
+    gcs_bucket = None
 
 def create_app():
     """
@@ -107,16 +120,71 @@ def create_app():
     app.register_blueprint(schedule_bp)
     app.register_blueprint(auth_bp)
 
+    # --- NEW ROUTES FOR PDF UPLOAD ---
+    # These routes are part of the main app, not a blueprint.
+    
+    @app.route("/upload_schedule")
+    def upload_schedule():
+        return render_template("upload_schedule.html")
+
+    @app.route("/upload", methods=["POST"])
+    def upload_file():
+        # Check if the required fields are in the form data
+        if "email" not in request.form or "timezone" not in request.form or "pdfFile" not in request.files:
+            flash("Missing form data. Please fill out all fields.", "error")
+            return redirect(url_for("upload_schedule"))
+
+        email = request.form["email"]
+        timezone = request.form["timezone"]
+        file = request.files["pdfFile"]
+
+        # Validate that a file was actually selected
+        if file.filename == "":
+            flash("No file selected.", "error")
+            return redirect(url_for("upload_schedule"))
+
+        # Validate the file type and name
+        if file and file.filename.endswith('.pdf'):
+            filename = secure_filename(file.filename)
+            
+            # Upload the file directly to Google Cloud Storage
+            if gcs_bucket:
+                try:
+                    # Use a unique path for each user's file
+                    blob_path = f"schedules/{email}/{filename}"
+                    blob = gcs_bucket.blob(blob_path)
+                    
+                    # Upload the file directly from the request stream
+                    blob.upload_from_file(file)
+
+                    print(f"File uploaded to GCS: {blob_path}")
+                    flash("Schedule uploaded successfully!", "success")
+
+                except Exception as e:
+                    flash(f"An error occurred during file upload: {e}", "error")
+                    print(f"GCS upload failed: {e}")
+            else:
+                flash("GCS is not configured correctly. Upload failed.", "error")
+        else:
+            flash("Invalid file type. Please upload a PDF file.", "error")
+
+        return redirect(url_for("dashboard"))
+    # --- END OF NEW ROUTES ---
+
     # A simple root route to redirect to the authentication page
     @app.route('/')
     def index():
         return redirect(url_for('auth_bp.login_page'))
-
+    
+    @app.route("/dashboard")
+    def dashboard():
+        # Placeholder for your dashboard logic
+        return "Dashboard page"
+    
     return app
 
 # Gunicorn (used by Cloud Run) will look for a top-level 'app' object.
 app = create_app()
 
 logging.debug("App factory finished. App instance created.")
-
 

@@ -155,3 +155,8 @@ def test_secrets():
         }
     })
 
+# --- NEW: Route to render the upload schedule page ---
+@auth_bp.route('/upload_schedule')
+def upload_schedule_page():
+    return render_template('auth/upload_schedule.html')
+
