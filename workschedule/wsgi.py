@@ -3,6 +3,14 @@
 
 import sys
 import os
+import logging
+
+# Ensure all debug logs are printed to the terminal
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    handlers=[logging.StreamHandler()]
+)
 
 # Add the project's 'src' directory to the system path to enable module imports
 # from the 'routes' package. This fixes the 'ModuleNotFoundError'.
@@ -10,6 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from flask import Flask
 from workschedule.routes.auth import auth_bp
+from workschedule.routes.schedule import schedule_bp
 
 # Create the Flask application instance.
 # We explicitly set the template_folder and static_folder to point to their
@@ -29,6 +38,7 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fall
 
 # Register the authentication blueprint with the application.
 app.register_blueprint(auth_bp)
+app.register_blueprint(schedule_bp)
 
 # The following is a simple "hello world" route for the root URL
 @app.route('/')
