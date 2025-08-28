@@ -53,10 +53,10 @@ def upload_pdf():
             logging.debug(f"File '{filename}' received and saved to a temporary location.")
             logging.debug(f"User email: {request.form.get('email')}, Timezone: {request.form.get('timezone')}")
 
-            # Document AI setup
-            project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-            location = "us"  # or your processor's location
-            processor_id = os.environ.get("DOCUMENT_AI_PROCESSOR_ID")
+            # Document AI setup (robust env var usage)
+            project_id = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("PROJECT_ID")
+            processor_id = os.environ.get("DOCUMENT_AI_PROCESSOR_ID") or os.environ.get("PROCESSOR_ID")
+            location = os.environ.get("DOCUMENT_AI_LOCATION") or "us"
             client = documentai.DocumentProcessorServiceClient()
             processor_path = client.processor_path(project_id, location, processor_id)
 
@@ -67,39 +67,16 @@ def upload_pdf():
             request_ai = documentai.ProcessRequest(name=processor_path, raw_document=raw_document)
             result = client.process_document(request=request_ai)
 
-            # Log only the entities for debugging
-            try:
-                entities_list = getattr(result.document, 'entities', [])
-                entities_json = [
-                    {
-                        "type_": getattr(e, "type_", None),
-                        "mention_text": getattr(e, "mention_text", None),
-                        "confidence": getattr(e, "confidence", None)
-                        # Add other fields as needed
-                    }
-                    for e in entities_list
-                ]
-                logging.debug(f"Document AI entities: {json.dumps(entities_json, indent=2)}")
-            except Exception as log_exc:
-                logging.error(f"Error logging Document AI entities: {log_exc}")
-
-            # Use Document AI labeled entities for ICS generation
+            # Use Document.to_json for robust entity extraction
             from workschedule.services.ics_generator import extract_shifts_from_docai_entities, create_ics_from_entries
-
-            # Robustly extract entities as a list
-            raw_entities = getattr(result.document, 'entities', None)
-            if raw_entities is None:
-                entities = []
-            elif isinstance(raw_entities, list):
-                entities = [e.to_dict() if hasattr(e, 'to_dict') else dict(e) for e in raw_entities]
-            else:
-                # If it's a single entity, wrap in a list
-                try:
-                    entities = [raw_entities.to_dict() if hasattr(raw_entities, 'to_dict') else dict(raw_entities)]
-                except Exception:
-                    entities = []
+            import json
+            document_json = documentai.Document.to_json(result.document)
+            document_dict = json.loads(document_json)
+            entities = document_dict.get('entities', [])
+            logging.debug(f"Document AI entities: {json.dumps(entities, indent=2)}")
 
             schedule_entries = extract_shifts_from_docai_entities(entities)
+            logging.debug(f"Parsed schedule entries: {json.dumps(schedule_entries, default=str, indent=2)}")
 
             ics_data = create_ics_from_entries(schedule_entries)
             global last_ics_data
@@ -108,8 +85,9 @@ def upload_pdf():
             os.remove(temp_path)
             return jsonify({
                 'message': 'PDF processed successfully!',
-                'document': result.document.text,
+                'document': document_dict.get('text', ''),
                 'ics': ics_data,
+                'schedule_entries': schedule_entries,
                 'download_url': '/schedule/download_ics'
             }), 200
         except Exception as e:
