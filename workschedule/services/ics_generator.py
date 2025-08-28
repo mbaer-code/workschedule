@@ -1,20 +1,124 @@
-import os
+import json
 import re
-import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, timezone
+import uuid
+import logging
 from icalendar import Calendar, Event
-from flask import Flask, request, Response
-from google.cloud import documentai_v1 as documentai
+import hashlib
 
-# --- Document AI and Data Extraction Logic ---
+# Set up basic logging for internal messages and debugging.
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+# The JSON data from your Document AI output.
+# In a real-world scenario, you would replace this with the actual
+# JSON output from your Document AI processing.
+document_ai_json_data = [
+    {
+        "type": "Work-shift",
+        "confidence": 1.0,
+        "id": "69",
+        "properties": [
+            {
+                "type": "Shift-date",
+                "mentionText": "Sep\n9",
+                "confidence": 0.97296906,
+                "id": "70"
+            }
+        ]
+    },
+    {
+        "type": "Work-shift",
+        "confidence": 1.0,
+        "id": "71",
+        "properties": [
+            {
+                "type": "Shift-date",
+                "mentionText": "Sep\n10",
+                "confidence": 0.999549,
+                "id": "72"
+            }
+        ]
+    },
+    {
+        "type": "Work-shift",
+        "confidence": 1.0,
+        "id": "73",
+        "properties": [
+            {
+                "type": "Department",
+                "mentionText": "Plumbing & Bath Associate",
+                "confidence": 0.9994467,
+                "id": "74"
+            },
+            {
+                "type": "Shift-date",
+                "mentionText": "Sep 11",
+                "confidence": 0.9883951,
+                "id": "75"
+            },
+            {
+                "type": "Shift-end",
+                "mentionText": "8:00 PM",
+                "confidence": 0.9999491,
+                "id": "76"
+            },
+            {
+                "type": "Start-start",
+                "mentionText": "11:30 AM",
+                "confidence": 0.9999976,
+                "id": "77"
+            },
+            {
+                "type": "Store-number",
+                "mentionText": "0660",
+                "confidence": 0.9999994,
+                "id": "78"
+            }
+        ]
+    },
+    {
+        "type": "Work-shift",
+        "confidence": 1.0,
+        "id": "79",
+        "properties": [
+            {
+                "type": "Shift-date",
+                "mentionText": "Sep\n12",
+                "confidence": 0.99987066,
+                "id": "80"
+            }
+        ]
+    },
+    {
+        "type": "Work-shift",
+        "confidence": 1.0,
+        "id": "81",
+        "properties": [
+            {
+                "type": "Shift-date",
+                "mentionText": "Sep\n13",
+                "confidence": 0.9999411,
+                "id": "82"
+            }
+        ]
+    }
+]
 
 def extract_shifts_from_docai_entities(entities):
     """
-    Extracts shift information from Document AI entities, leveraging nested
-    properties and normalized values.
+    Parses Document AI entities to find and extract work shift information.
+    It handles finding the year from other entities and combines
+    relevant properties into a single shift entry.
+    
+    Args:
+        entities (list): A list of dictionaries representing Document AI entities.
+
+    Returns:
+        list: A list of dictionaries, where each dictionary represents a
+              parsed work shift with keys like 'date', 'start_time', etc.
     """
     shifts = []
-    # Try to get the year from a top-level entity like PageDateRange
+    # Try to get year from date range entity, which is a great improvement.
     year = None
     for entity in entities:
         if entity.get('type_') in ['PageDateRange', 'DocumentTitle']:
@@ -23,207 +127,213 @@ def extract_shifts_from_docai_entities(entities):
             if year_match:
                 year = year_match.group(1)
                 break
-    # Default to current year if not found
+    
+    # If no year is found, default to the current year.
     if not year:
         year = str(datetime.now().year)
     
-    # Iterate through entities to find the main shift entries
+    seen = set()
+    
+    # Iterate through the top-level entities to find work shifts.
     for entity in entities:
-        if entity.get('type_') == 'ShiftEntry':
-            shift_data = {
-                'date': None,
-                'start_time': None,
-                'end_time': None,
-                'role': None,
-                'department': None,
-                'shift_total': None,
-            }
-            
-            # Since your model extracts a single 'ShiftEntry' entity with a lot of text,
-            # it's likely your model is extracting all sub-fields as properties.
-            # We'll need to check the 'properties' of the 'ShiftEntry' entity.
+        entity_type = entity.get('type') or entity.get('type_')
+        
+        # Check if the entity is a work shift.
+        if entity_type == 'Work-shift':
             properties = entity.get('properties', [])
             
-            # Extract date, start, and end.
-            for prop in properties:
-                prop_type = prop.get('type_')
-                
-                if prop_type == 'day':
-                    day_mention_text = prop.get('mention_text')
-                    month_mention_text = ''
-                    for month_prop in properties:
-                        if month_prop.get('type_') == 'month':
-                            month_mention_text = month_prop.get('mention_text')
-                            break
+            # Log the processing of each work-shift entity for debugging.
+            page_num = None
+            if 'pageAnchor' in entity:
+                page_refs = entity['pageAnchor'].get('pageRefs', [])
+                if page_refs and 'page' in page_refs[0]:
+                    page_num = page_refs[0]['page']
+            logging.info(f"Processing Work-shift entity on page: {page_num}, id: {entity.get('id')}")
 
-                    if month_mention_text and day_mention_text:
-                        try:
-                            # Combine to create a date object
-                            date_str = f"{month_mention_text} {day_mention_text} {year}"
-                            shift_data['date'] = datetime.strptime(date_str, "%b %d %Y")
-                        except ValueError:
-                            # Skip if date is invalid
-                            continue
+            if not properties:
+                continue
+
+            shift_data = {}
+            # Extract key properties from the current work shift entity.
+            for prop in properties:
+                prop_type = (prop.get('type') or prop.get('type_') or '').lower()
+                mention = prop.get('mentionText') or prop.get('mention_text', '')
+
+                if prop_type in ['shift-date', 'date']:
+                    shift_data['date_str'] = mention.replace('\n', ' ').strip()
+                elif prop_type in ['start-shift', 'start-start']:
+                    shift_data['start_time'] = mention.strip()
+                elif prop_type == 'shift-end':
+                    shift_data['end_time'] = mention.strip()
+                elif prop_type == 'store-number':
+                    shift_data['role'] = mention.strip()
+                elif prop_type == 'department':
+                    shift_data['department'] = mention.strip()
+                elif prop_type == 'shift-total':
+                    shift_data['shift_total'] = mention.strip()
+
+            try:
+                date_obj = None
+                if 'date_str' in shift_data:
+                    date_str = shift_data['date_str']
+                    date_obj = datetime.strptime(f"{date_str} {year}", "%b %d %Y")
                 
-                elif prop_type == 'ShiftStart':
-                    shift_data['start_time'] = prop.get('mention_text')
-                
-                elif prop_type == 'ShiftEnd':
-                    shift_data['end_time'] = prop.get('mention_text')
-                
-                elif prop_type == 'StoreNumber':
-                    shift_data['role'] = prop.get('mention_text')
-                
-                elif prop_type == 'Department':
-                    shift_data['department'] = prop.get('mention_text')
-                
-                elif prop_type == 'ShiftTotal':
-                    shift_data['shift_total'] = prop.get('mention_text')
-                    
-            # Only add to the list if essential data is found
-            if shift_data['date'] and shift_data['start_time'] and shift_data['end_time']:
-                shifts.append(shift_data)
+                # We need a date, start time, and end time to create a full event.
+                if not date_obj:
+                    logging.info(f"SKIP: No valid date for shift entity: {shift_data}")
+                    continue
+                if not shift_data.get('start_time') or not shift_data.get('end_time'):
+                    logging.info(f"SKIP: Missing start or end time for shift entity: {shift_data}")
+                    continue
+
+            except Exception as e:
+                logging.info(f"SKIP: Date parsing failed for shift entity: {shift_data}, error: {e}")
+                continue
+
+            # Deduplication key to prevent duplicate calendar entries.
+            dedup_key = f"{date_obj.date()}_{shift_data.get('start_time','').strip()}"
+            if dedup_key in seen:
+                logging.info(f"SKIP: Duplicate shift for key {dedup_key}: {shift_data}")
+                continue
+            seen.add(dedup_key)
+
+            # Create a structured entry for the valid shift.
+            shift_entry = {
+                'date': date_obj,
+                'start_time': shift_data.get('start_time',''),
+                'end_time': shift_data.get('end_time',''),
+                'role': shift_data.get('role',''),
+                'department': shift_data.get('department',''),
+                'shift_total': shift_data.get('shift_total','')
+            }
+            logging.info(f"INCLUDE: Extracted shift entry: {shift_entry}")
+            shifts.append(shift_entry)
 
     return shifts
 
-# --- ICS Generation Utility (Your existing code) ---
+def create_ics_from_entries(entries, calendar_name="work-schedule"):
+    """
+    Given a list of shift entries, generate an ICS calendar file as a string.
+    This function uses the iCalendar library for robust file creation.
 
-def combine_date_time(date_obj, time_str):
-    """
-    Combines a date object and a time string like '12:30 PM' into a datetime object.
-    """
-    try:
-        time_obj = datetime.strptime(time_str, '%I:%M %p').time()
-    except Exception:
-        try:
-            time_obj = datetime.strptime(time_str, '%I %p').time()
-        except Exception:
-            time_obj = datetime.min.time()
-    return datetime.combine(date_obj.date(), time_obj)
+    Args:
+        entries (list): A list of dictionaries, each representing a work shift.
+        calendar_name (str): The name to display for the calendar.
 
-def create_ics_from_entries(entries, calendar_name="work-schedule-cloud"):
-    """
-    Given a list of entries, generate an ICS calendar file as a string.
+    Returns:
+        str: The content of the iCalendar file.
     """
     cal = Calendar()
     cal.add('prodid', '-//Workforce Schedule//mxm.dk//')
     cal.add('version', '2.0')
+    # Use METHOD:PUBLISH to tell the calendar client this is a full calendar publication.
+    cal.add('method', 'PUBLISH')
     cal.add('X-WR-CALNAME', calendar_name)
-    
+
+    # Use a dictionary to handle deduplication and only keep one shift per day.
     unique_by_date = {}
     for entry in entries:
         date_key = entry['date'].date() if isinstance(entry['date'], datetime) else entry['date']
+        # This logic ensures we only add one event per day from the input.
         if date_key not in unique_by_date:
             unique_by_date[date_key] = entry
-            
+
+    # Iterate through the unique entries and create a VEVENT for each one.
     for entry in unique_by_date.values():
         event = Event()
         start_dt = combine_date_time(entry['date'], entry['start_time'])
         end_dt = combine_date_time(entry['date'], entry['end_time'])
         
-        summary_parts = ['THD']
-        if entry.get('role'):
-            summary_parts.append(entry['role'])
-        if entry.get('department') and entry['department'] != entry.get('role'):
-            summary_parts.append(entry['department'])
-        event.add('summary', ' | '.join(summary_parts))
-        
+        # If the end time is before the start time, it likely spans midnight.
+        if end_dt < start_dt:
+            end_dt += timedelta(days=1)
+
+        # Summary: Set the summary to a fixed value.
+        event.add('summary', 'THD')
+
+        # Add start and end times to the event.
         event.add('dtstart', start_dt)
         event.add('dtend', end_dt)
         
+        # Add DTSTAMP and LAST-MODIFIED for robust updates.
+        now_utc = datetime.now(timezone.utc)
+        event.add('dtstamp', now_utc)
+        event.add('last-modified', now_utc)
+
+        # Description: Formatted for easy reading on a watch.
         description_parts = []
+        # Add a formatted time range.
+        if entry.get('start_time') and entry.get('end_time'):
+            description_parts.append(f"{entry['start_time']} - {entry['end_time']}")
+        # Add day and date as the next line.
+        description_parts.append(entry['date'].strftime('%A, %b %d, %Y'))
+        # Add the department.
+        if entry.get('department'):
+            description_parts.append(entry['department'])
+        # Add the store number.
+        if entry.get('role'):
+            description_parts.append(entry['role'])
+        # Add the shift total if it exists.
         if entry.get('shift_total'):
             description_parts.append(f"Shift Total: {entry['shift_total']}")
-        if entry.get('meal_start') and entry.get('meal_end'):
-            description_parts.append(f"Meal: {entry['meal_start']} - {entry['meal_end']}")
-        event.add('description', ' | '.join(description_parts))
-        
-        uid_fields = [
-            'THD',
-            entry.get('role', ''),
-            entry.get('department', ''),
-            start_dt.isoformat(),
-            end_dt.isoformat(),
-            calendar_name,
-            entry.get('shift_total', ''),
-        ]
-        uid_source = '-'.join(str(f) for f in uid_fields)
+
+        event.add('description', '\n'.join(description_parts))
+
+        # Generate a unique UID for each event based on its contents.
+        # This is the corrected logic: a repeatable hash based on the event's data.
+        uid_source = f"{start_dt.isoformat()}-{end_dt.isoformat()}-{entry.get('department')}-{entry.get('role')}"
         uid_hash = hashlib.sha1(uid_source.encode('utf-8')).hexdigest()
         event.add('uid', uid_hash)
-        
+
         cal.add_component(event)
-        
+
     return cal.to_ical().decode('utf-8')
 
-# --- Cloud Run Flask Application ---
-
-app = Flask(__name__)
-
-# Replace with your actual project ID, location, and processor ID
-PROJECT_ID=os.environ.get('GOOGLE_CLOUD_PROJECT')
-LOCATION=os.environ.get('DOCUMENT_AI_LOCATION')
-PROCESSOR_ID = os.environ.get('DOCUMENT_AI_PROCESSOR_ID')
-
-def process_document_ai(file_path):
-    """Processes a document using the Document AI API."""
-    client_options = {"api_endpoint": f"{LOCATION}-documentai.googleapis.com"}
-    docai_client = documentai.DocumentProcessorServiceClient(client_options=client_options)
-    resource_name = docai_client.processor_path(PROJECT_ID, LOCATION, PROCESSOR_ID)
-    
-    with open(file_path, "rb") as image_file:
-        image_content = image_file.read()
-    
-    raw_document = documentai.RawDocument(
-        content=image_content, mime_type="application/pdf"
-    )
-    request = documentai.ProcessRequest(name=resource_name, raw_document=raw_document)
-    result = docai_client.process_document(request=request)
-    
-    return result.document.entities
-
-@app.route('/upload-and-convert', methods=['POST'])
-def upload_and_convert():
+def combine_date_time(date_obj, time_str):
     """
-    Accepts a PDF file upload, processes it with Document AI, and returns an ICS file.
-    """
-    if 'file' not in request.files:
-        return 'No file part in the request', 400
-        
-    file = request.files['file']
-    if file.filename == '':
-        return 'No selected file', 400
-        
-    # Securely save the file to a temporary location
-    file_path = os.path.join('/tmp', file.filename)
-    file.save(file_path)
+    Combines a date object and a time string (e.g., '12:30 PM') into a datetime object.
     
+    Args:
+        date_obj (datetime.datetime): A date object.
+        time_str (str): A time string in the format '%I:%M %p' or '%I %p'.
+
+    Returns:
+        datetime.datetime: The combined datetime object.
+    """
     try:
-        # Step 1: Process the document with your trained AI
-        doc_ai_entities = process_document_ai(file_path)
-        
-        # Step 2: Extract the shift data from the Document AI entities
-        extracted_shifts = extract_shifts_from_docai_entities(doc_ai_entities)
-        
-        if not extracted_shifts:
-            return "No shift information could be extracted from the document.", 404
-        
-        # Step 3: Create the ICS file content
-        ics_content = create_ics_from_entries(extracted_shifts)
-        
-        # Return the ICS file with the correct MIME type
-        response = Response(
-            ics_content,
-            mimetype='text/calendar',
-            headers={'Content-Disposition': 'attachment; filename=schedule.ics'}
-        )
-        return response
+        time_obj = datetime.strptime(time_str, '%I:%M %p').time()
+    except ValueError:
+        try:
+            time_obj = datetime.strptime(time_str, '%I %p').time()
+        except ValueError:
+            logging.error(f"Failed to parse time string: {time_str}")
+            time_obj = time(0, 0)  # Default to midnight if parsing fails.
+    return datetime.combine(date_obj.date(), time_obj)
 
-    except Exception as e:
-        return {'error': str(e)}, 500
-    finally:
-        # Clean up the temporary file
-        os.remove(file_path)
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+if __name__ == "__main__":
+    # --- Main Execution Flow ---
+    
+    # 1. Extract shift data from the raw Document AI entities.
+    logging.info("Starting extraction of shifts from Document AI entities...")
+    extracted_shifts = extract_shifts_from_docai_entities(document_ai_json_data)
+    logging.info(f"Successfully extracted {len(extracted_shifts)} complete shifts.")
+    
+    # 2. Convert the extracted shift data into a complete ICS file string.
+    logging.info("Generating ICS file content...")
+    ics_file_content = create_ics_from_entries(extracted_shifts)
+    
+    # 3. Print the final ICS file content.
+    if ics_file_content:
+        print("\n" + "="*50)
+        print("Generated ICS File Content")
+        print("="*50)
+        print(ics_file_content)
+        print("="*50)
+        
+        # Optional: Save the content to a file.
+        # with open("shifts.ics", "w") as f:
+        #     f.write(ics_file_content)
+        # print("File saved as 'shifts.ics'")
+    else:
+        print("No complete shifts were found to generate an ICS file.")
 
