@@ -19,32 +19,19 @@ print("DEBUG: auth.py blueprint created and loaded.")
 # This check is crucial for handling the app factory pattern.
 # We ensure the SDK is initialized before any functions in this blueprint
 # attempt to use it, preventing the 'default Firebase app does not exist' error.
-# The credentials file should be in the root directory and excluded from git.
 if not firebase_admin._apps:
     print("DEBUG: Initializing Firebase Admin SDK from auth.py.")
-    
-    # Load the Firebase service account key from an environment variable.
-    # We check for a common naming convention, and then a more specific one.
-    service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH') or os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH')
+    try:
+        # On Cloud Run, this will automatically find the service account attached to the
+        # service. For local development, ensure you have run
+        # 'gcloud auth application-default login' on your machine.
+        firebase_admin.initialize_app()
+        print("DEBUG: Firebase Admin SDK initialized successfully using Application Default Credentials.")
+    except Exception as e:
+        print(f"ERROR: Failed to initialize Firebase Admin SDK: {e}")
+        # Depending on your app, you might want to raise an exception here
+        # to prevent the server from starting with a broken Firebase connection.
 
-    if not service_account_path:
-        print("ERROR: FIREBASE_SERVICE_ACCOUNT_PATH not set.")
-        # This will need to be configured for local and cloud run.
-        # Fallback to a hardcoded path for local testing
-        try:
-            cred = credentials.Certificate('instance/service-account.json')
-            firebase_admin.initialize_app(cred)
-            print("DEBUG: Firebase Admin SDK initialized successfully with fallback.")
-        except Exception as e:
-            print(f"ERROR: Failed to initialize Firebase Admin SDK: {e}")
-    else:
-        try:
-            cred = credentials.Certificate(service_account_path)
-            firebase_admin.initialize_app(cred)
-            print("DEBUG: Firebase Admin SDK initialized successfully.")
-        except Exception as e:
-            print(f"ERROR: Failed to initialize Firebase Admin SDK with service account path: {e}")
-            # Consider raising an exception or handling this more gracefully.
 
 # --- Login Required Decorator ---
 # This decorator protects routes, ensuring a user is logged in
@@ -145,7 +132,7 @@ def test_secrets():
     # Retrieve secrets from environment variables
     email_api_key = os.getenv('EMAIL_SERVICE_API_KEY')
     stripe_secret_key = os.getenv('STRIPE_SECRET_KEY')
-    
+
     return jsonify({
         "status": "success",
         "message": "Secrets retrieved from environment variables.",
