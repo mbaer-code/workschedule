@@ -15,6 +15,11 @@ auth_bp = Blueprint('auth_bp', __name__, url_prefix='/auth')
 print("DEBUG: auth.py blueprint created and loaded.")
 # -----------------------------
 
+# Route for /auth/index to display index.html
+@auth_bp.route('/index')
+def index_page():
+    return render_template('index.html')
+
 # --- Initialize Firebase Admin SDK if not already initialized ---
 # This check is crucial for handling the app factory pattern.
 # We ensure the SDK is initialized before any functions in this blueprint
