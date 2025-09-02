@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MySchedule.cloud - The Easiest Way to Manage Your Team's Shifts</title>
+    <!--
+        This file, named 'landing.html', is located at 'workforce/routes/landing.html'.
+        The web address (URL) for this page would be MySchedule.cloud/workforce/routes/landing.html
+    -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #334155;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 antialiased">
+
+    <!-- Navigation Bar -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="text-2xl font-bold text-sky-600">
+                MySchedule.cloud
+            </div>
+            <div class="flex items-center space-x-6">
+                <a href="#features" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">Features</a>
+                <a href="#" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">Pricing</a>
+                <button id="auth-button" class="bg-sky-600 text-white px-5 py-2 rounded-full font-semibold hover:bg-sky-700 transition-colors duration-300">
+                    Log In / Sign Up
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main id="app-container">
+        <!-- Landing Page Content -->
+        <div id="landing-page" class="active-content">
+            <!-- Hero Section -->
+            <section class="bg-sky-600 text-white py-16 md:py-24 text-center rounded-b-3xl">
+                <div class="container mx-auto px-6">
+                    <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold mb-4 leading-tight">
+                        Workforce users! We can cloud your schedule and keep it fresh.
+                    </h1>
+                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 opacity-90">
+                        Turn your schedule from that file you download from the Workforce Tools app into entries in your favorite calendar. You can choose to update your calendar every week or every other week.
+                    </p>
+                    <div class="flex justify-center mb-12">
+                        <a href="#trial" class="bg-white text-sky-600 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition-colors duration-300 transform hover:scale-105">
+                            Start Auto-Syncing Now
+                        </a>
+                    </div>
+                    <p class="text-sm opacity-75">No credit card required. Join thousands of users who live in the cloud.</p>
+                </div>
+            </section>
+
+            <!-- Problem/Solution Section -->
+            <section class="py-16 bg-white rounded-3xl -mt-16 relative z-10 shadow-xl">
+                <div class="container mx-auto px-6 text-center">
+                    <h2 class="text-2xl md:text-3xl font-bold mb-10 text-gray-800">Stop the manual copy-paste.</h2>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        <div class="bg-gray-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
+                            <div class="text-4xl mb-4 text-sky-500">🗓️</div>
+                            <h3 class="font-bold text-lg mb-2">Constantly checking a separate website</h3>
+                            <p class="text-sm text-gray-600">It's a hassle to remember your work schedule when it's not in your main calendar.</p>
+                        </div>
+                        <div class="bg-gray-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
+                            <div class="text-4xl mb-4 text-sky-500">📞</div>
+                            <h3 class="font-bold text-lg mb-2">Missing important updates</h3>
+                            <p class="text-sm text-gray-600">Changes and shift-swaps get lost in group chats. Be notified automatically.</p>
+                        </div>
+                        <div class="bg-gray-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
+                            <div class="text-4xl mb-4 text-sky-500">❌</div>
+                            <h3 class="font-bold text-lg mb-2">Making scheduling mistakes</h3>
+                            <p class="text-sm text-gray-600">Manual entries lead to mistakes. We ensure your calendar is always accurate.</p>
+                        </div>
+                        <div class="bg-gray-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
+                            <div class="text-4xl mb-4 text-sky-500">⏱️</div>
+                            <h3 class="font-bold text-lg mb-2">Feeling disconnected from your team</h3>
+                            <p class="text-sm text-gray-600">See your full team schedule and stay connected on the go.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features Section: The 3-Step Process -->
+            <section id="features" class="py-16 bg-gray-100">
+                <div class="container mx-auto px-6 text-center">
+                    <h2 class="text-3xl font-bold mb-4 text-gray-800">Your Schedule, Synced in 3 Simple Steps</h2>
+                    <p class="text-lg text-gray-600 max-w-3xl mx-auto mb-12">The easiest way to get your work life organized.</p>
+                    
+                    <div class="grid md:grid-cols-3 gap-10">
+                        <div class="flex flex-col items-center bg-white p-8 rounded-2xl shadow-md">
+                            <div class="bg-sky-500 text-white p-4 rounded-full mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8">
+                                    <path fill-rule="evenodd" d="M11.47 2.47a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L12 4.81v9.79a.75.75 0 0 1-1.5 0V4.81L7.03 8.03a.75.75 0 0 1-1.06-1.06l4.5-4.5Z" clip-rule="evenodd" />
+                                    <path d="M3.75 14.25a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM3.75 18.75a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM3.75 10.5a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM10.5 19.5h9.75a.75.75 0 0 1 0 1.5h-9.75a.75.75 0 0 1 0-1.5Z" />
+                                </svg>
+                            </div>
+                            <h3 class="font-bold text-xl mb-2 text-gray-800">1. Upload Your PDF</h3>
+                            <p class="text-gray-600 text-center">Drag and drop your workforce schedule PDF from any website. Our system does the rest.</p>
+                        </div>
+                        <div class="flex flex-col items-center bg-white p-8 rounded-2xl shadow-md">
+                            <div class="bg-sky-500 text-white p-4 rounded-full mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8">
+                                    <path d="M1.5 8.67v8.586a1.5 1.5 0 0 0 .543 1.144L6 21.674V14.5H3.57a.75.75 0 0 1-.75-.75V8.67Zm19.5 0v8.586a1.5 1.5 0 0 1-.543 1.144L18 21.674V14.5h2.43a.75.75 0 0 1 .75.75V8.67ZM12 4.5a.75.75 0 0 1 .75.75V11.25h1.432a.75.75 0 0 1 .536 1.272l-4.5 4.5a.75.75 0 0 1-1.064 0l-4.5-4.5a.75.75 0 0 1 .536-1.272H11.25V5.25A.75.75 0 0 1 12 4.5Z" />
+                                    <path d="M5.52 4.017c-.457.199-.75.645-.75 1.153v8.586a1.5 1.5 0 0 0 .543 1.144l4.137 3.659a1.5 1.5 0 0 0 1.045.405h2.39a1.5 1.5 0 0 0 1.045-.405l4.137-3.659a1.5 1.5 0 0 0 .543-1.144V5.17a1.5 1.5 0 0 0-.75-1.153 1.525 1.525 0 0 0-1.285-.015L12 5.861 6.805 4.002a1.525 1.525 0 0 0-1.285.015Z" />
+                                </svg>
+                            </div>
+                            <h3 class="font-bold text-xl mb-2 text-gray-800">2. We Process the Data</h3>
+                            <p class="text-gray-600 text-center">Our AI scans the PDF to automatically extract dates, times, and locations of your shifts.</p>
+                        </div>
+                        <div class="flex flex-col items-center bg-white p-8 rounded-2xl shadow-md">
+                            <div class="bg-sky-500 text-white p-4 rounded-full mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8">
+                                    <path fill-rule="evenodd" d="M1.5 5.625c0-1.036.84-1.875 1.875-1.875h17.25c1.035 0 1.875.84 1.875 1.875v12.75c0 1.035-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 18.375V5.625Zm4.878 5.76a.75.75 0 0 1 1.065.044l3.526 4.421a.75.75 0 0 1-.611 1.22H7.288a.75.75 0 0 1-.58-.332l-2.25-3a.75.75 0 0 1 .958-.934Zm10.42-.516a.75.75 0 0 1 .075 1.066l-5.625 6a.75.75 0 0 1-1.072.056L8.85 14.56a.75.75 0 1 1 .954-1.196Zm.422-4.131a.75.75 0 0 0-1.082-.245L11.25 9.879l-1.903-1.82a.75.75 0 1 0-1.018 1.426l2.5 2.388a.75.75 0 0 0 1.082-.245l5.625-6a.75.75 0 0 0-.245-1.082Z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <h3 class="font-bold text-xl mb-2 text-gray-800">3. One Click to Sync</h3>
+                            <p class="text-gray-600 text-center">We'll send you a magic link via email. Open it, and your schedule is instantly on your calendar.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Testimonial Section -->
+            <section class="py-16 bg-white">
+                <div class="container mx-auto px-6">
+                    <h2 class="text-3xl font-bold text-center mb-12 text-gray-800">Real talk from our users</h2>
+                    <div class="grid md:grid-cols-3 gap-8">
+                        <div class="bg-gray-100 p-8 rounded-2xl shadow-sm">
+                            <blockquote class="text-gray-600 italic">
+                                "This has been a game changer. I used to screenshot my schedule and hope for the best. Now I just upload the PDF and the shifts just show up. So simple."
+                            </blockquote>
+                            <div class="mt-4 text-sm font-semibold text-gray-800">
+                                Chloe M., College Student
+                            </div>
+                        </div>
+                        <div class="bg-gray-100 p-8 rounded-2xl shadow-sm">
+                            <blockquote class="text-gray-600 italic">
+                                "The PDF upload and the one-click sync is just genius. I literally don't have to think about my work schedule anymore. It just works."
+                            </blockquote>
+                            <div class="mt-4 text-sm font-semibold text-gray-800">
+                                Sam F., Part-time Associate
+                            </div>
+                        </div>
+                        <div class="bg-gray-100 p-8 rounded-2xl shadow-sm">
+                            <blockquote class="text-gray-600 italic">
+                                "Our team loves that they can see their work schedule right alongside their personal appointments in Google Calendar. It's cut down on so many last-minute calls and no-shows."
+                            </blockquote>
+                            <div class="mt-4 text-sm font-semibold text-gray-800">
+                                Jessica R., Restaurant Manager
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Final Call to Action Section -->
+            <section id="trial" class="py-20 bg-sky-600 text-white text-center rounded-t-3xl shadow-xl">
+                <div class="container mx-auto px-6">
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4">Ready to Take Control of Your Team's Schedule?</h2>
+                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 opacity-90">
+                        Join thousands of happy managers who are building a better way to work.
+                    </p>
+                    <a href="#" class="bg-white text-sky-600 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition-colors duration-300 transform hover:scale-105">
+                        Start Your Free Trial Today
+                    </a>
+                </div>
+            </section>
+            <!-- Footer -->
+            <footer class="bg-sky-700 text-white py-8">
+                <div class="container mx-auto px-6 text-center text-sm opacity-80">
+                    <p>&copy; 2025 MySchedule.cloud. All rights reserved.</p>
+                </div>
+            </footer>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard" class="hidden">
+            <section class="py-16 md:py-24 text-center">
+                <div class="container mx-auto px-6">
+                    <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold mb-4 leading-tight text-sky-600">
+                        Welcome to your dashboard!
+                    </h1>
+                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 text-gray-700">
+                        This is your space to manage your cloud schedule.
+                    </p>
+                    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-2xl mx-auto">
+                        <p class="text-gray-600">Your schedule and settings will appear here. For now, you can feel confident that you're logged in and ready to go.</p>
+                        <p class="mt-4 text-sm text-gray-500">
+                            You'll be able to manage your uploads and calendar connections here soon.
+                        </p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">Log In to Your Account</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <input type="email" id="email" placeholder="Email Address" class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500" required>
+                </div>
+                <div>
+                    <input type="password" id="password" placeholder="Password" class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500" required>
+                </div>
+                <button type="submit" class="w-full bg-sky-600 text-white font-bold py-3 px-6 rounded-full hover:bg-sky-700 transition-colors duration-300">
+                    Log In
+                </button>
+            </form>
+            <p id="login-error-message" class="text-red-500 text-sm mt-4 hidden">Invalid email or password.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const authButton = document.getElementById('auth-button');
+            const landingPage = document.getElementById('landing-page');
+            const dashboard = document.getElementById('dashboard');
+            const loginModal = document.getElementById('login-modal');
+            const loginForm = document.getElementById('login-form');
+            const loginErrorMessage = document.getElementById('login-error-message');
+
+            const checkAuthStatus = () => {
+                const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+                if (isLoggedIn) {
+                    showDashboard();
+                } else {
+                    showLandingPage();
+                }
+            };
+
+            const showLandingPage = () => {
+                landingPage.classList.remove('hidden');
+                dashboard.classList.add('hidden');
+                authButton.textContent = 'Log In / Sign Up';
+                authButton.onclick = () => loginModal.style.display = 'flex';
+            };
+
+            const showDashboard = () => {
+                landingPage.classList.add('hidden');
+                dashboard.classList.remove('hidden');
+                authButton.textContent = 'Log Out';
+                authButton.onclick = () => {
+                    localStorage.removeItem('isLoggedIn');
+                    checkAuthStatus();
+                };
+            };
+
+            // Login form submission handler
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+
+                // Simple hardcoded login for demonstration
+                if (password === 'test') {
+                    localStorage.setItem('isLoggedIn', 'true');
+                    loginModal.style.display = 'none';
+                    checkAuthStatus();
+                } else {
+                    loginErrorMessage.classList.remove('hidden');
+                }
+            });
+
+            // Hide modal on outside click
+            loginModal.addEventListener('click', (e) => {
+                if (e.target === loginModal) {
+                    loginModal.style.display = 'none';
+                }
+            });
+
+            checkAuthStatus();
+        });
+    </script>
+
+</body>
+</html>
+
