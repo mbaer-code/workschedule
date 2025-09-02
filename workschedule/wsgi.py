@@ -40,10 +40,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fall
 app.register_blueprint(auth_bp)
 app.register_blueprint(schedule_bp)
 
-# The following is a simple "hello world" route for the root URL
+
+# The following root route renders index.html
 @app.route('/')
-def hello_world():
-    return 'Hello, World!'
+def index():
+    from flask import render_template
+    return render_template('index.html')
 
 # This block is required to run the development server.
 # The `if __name__ == '__main__':` check ensures that the server only runs

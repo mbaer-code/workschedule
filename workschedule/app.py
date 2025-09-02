@@ -171,10 +171,12 @@ def create_app():
         return redirect(url_for("dashboard"))
     # --- END OF NEW ROUTES ---
 
-    # A simple root route to redirect to the authentication page
+
+    # Root route and /index route render index.html directly
     @app.route('/')
+    @app.route('/index')
     def index():
-        return redirect(url_for('auth_bp.login_page'))
+        return render_template('index.html')
     
     @app.route("/dashboard")
     def dashboard():
