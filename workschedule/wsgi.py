@@ -12,11 +12,11 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
-# Add the project's 'src' directory to the system path to enable module imports
 # from the 'routes' package. This fixes the 'ModuleNotFoundError'.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from flask import Flask
+from workschedule.app import app
 from workschedule.routes.auth import auth_bp
 from workschedule.routes.schedule import schedule_bp
 
