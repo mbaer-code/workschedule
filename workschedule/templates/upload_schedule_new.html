@@ -1,0 +1,62 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Schedule (New Workflow)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 antialiased">
+    <!-- Navigation Bar -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="text-2xl font-bold text-sky-600">
+                MySchedule.cloud
+            </div>
+            <div class="flex items-center space-x-6">
+                <a href="/index" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">Home</a>
+                <a href="#about-us" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">About Us</a>
+                <a href="/auth/login" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">Log In / Sign Up</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="flex flex-col items-center justify-center min-h-screen py-12">
+        <section class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg">
+            <h1 class="text-3xl font-extrabold text-sky-600 mb-4 text-center">Upload Your Workforce Schedule</h1>
+            <p class="text-gray-600 mb-6 text-center">Provide your Google Gmail address, timezone, and the Workforce schedule PDF file you wish to upload.</p>
+            <form action="/schedule/upload_pdf" method="post" enctype="multipart/form-data" class="space-y-6">
+                <div>
+                    <label for="email" class="block text-gray-700 font-semibold mb-2">Gmail Address</label>
+                    <input type="email" id="email" name="email" required class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <div>
+                    <label for="timezone" class="block text-gray-700 font-semibold mb-2">Your Timezone</label>
+                    <select id="timezone" name="timezone" required class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <option value="" disabled selected>Select a timezone...</option>
+                        <option value="EST">Eastern Time (EST)</option>
+                        <option value="CST">Central Time (CST)</option>
+                        <option value="MST">Mountain Time (MST)</option>
+                        <option value="PST">Pacific Time (PST)</option>
+                        <option value="GMT">Greenwich Mean Time (GMT)</option>
+                        <option value="JST">Japan Standard Time (JST)</option>
+                        <option value="AEST">Australian Eastern Standard Time (AEST)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="pdf_file" class="block text-gray-700 font-semibold mb-2">Select PDF File</label>
+                    <input type="file" id="pdf_file" name="pdf_file" accept=".pdf" required class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <div class="flex justify-center">
+                    <input type="submit" value="Upload Schedule" class="bg-sky-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-sky-700 transition-colors duration-300 transform hover:scale-105 cursor-pointer">
+                </div>
+            </form>
+            <div class="mt-8 flex flex-col items-center">
+                <a href="/schedule/download_ics" class="bg-green-500 text-white font-bold py-2 px-6 rounded-full shadow-lg hover:bg-green-600 transition-colors duration-300 transform hover:scale-105 mb-4">Download ICS Calendar</a>
+                <a href="/auth/dashboard" class="bg-gray-200 text-sky-600 font-bold py-2 px-6 rounded-full shadow-lg hover:bg-gray-300 transition-colors duration-300 transform hover:scale-105">Return to Dashboard</a>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

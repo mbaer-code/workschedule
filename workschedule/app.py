@@ -70,7 +70,7 @@ def create_app():
     """
     Creates and configures the Flask application.
     """
-    app = Flask(__name__, static_folder='src/static', template_folder='src/templates')
+    app = Flask(__name__, static_folder='workschedule/static', template_folder='workschedule/templates')
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fallback_key")
 
     logging.debug(f"App object created. {app.secret_key}")
@@ -113,8 +113,8 @@ def create_app():
     
     # --- Register Blueprints ---
     logging.debug("Attempting to import blueprints...")
-    from src.routes.schedule import schedule_bp
-    from src.routes.auth import auth_bp
+    from workschedule.routes.schedule import schedule_bp
+    from workschedule.routes.auth import auth_bp
     logging.debug("Blueprints imported successfully.")
     
     app.register_blueprint(schedule_bp)
@@ -125,7 +125,7 @@ def create_app():
     
     @app.route("/upload_schedule")
     def upload_schedule():
-        return render_template("upload_schedule.html")
+        return render_template("upload_schedule_new.html")
 
     @app.route("/upload", methods=["POST"])
     def upload_file():
