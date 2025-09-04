@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Ready</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .flash-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .flash-success {
+            background-color: #10b981;
+        }
+        .flash-error {
+            background-color: #ef4444;
+        }
+        .flash-message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="flash-message flash-{{ category }} show">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="container p-8 space-y-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800">Your Schedule is Ready!</h1>
+        <p class="text-center text-gray-600">
+            Your schedule has been processed. Review it and get your calendar file below.
+        </p>
+
+        <!-- Dynamic Content based on user type -->
+        {% if is_free_trial %}
+        <!-- Free Trial User UI -->
+        <div class="space-y-4">
+            <h2 class="text-2xl font-semibold text-gray-800">Enjoy your free trial!</h2>
+            <p class="text-gray-600">As a first-time user, you get to convert your first schedule for free.</p>
+            <form id="confirmForm" action="{{ url_for('schedule_bp.confirm_and_send_email') }}" method="post" class="space-y-4">
+                <input type="hidden" name="job_id" value="{{ job_id }}">
+                <input type="hidden" name="customer_email" value="{{ customer_email }}">
+                <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:bg-blue-700 transition-colors duration-300">
+                    Accept & Get Free Calendar
+                </button>
+            </form>
+        </div>
+        {% else %}
+        <!-- Returning User UI -->
+        <div class="space-y-4">
+            <h2 class="text-2xl font-semibold text-gray-800">Convert another schedule</h2>
+            <p class="text-gray-600">Thank you for being a returning user! Please proceed to payment to convert your new schedule.</p>
+            <div class="flex items-center justify-between bg-gray-50 p-4 rounded-md">
+                <span class="text-lg font-medium text-gray-700">One-time payment</span>
+                <span class="text-xl font-bold text-gray-900">$1.99</span>
+            </div>
+            <button id="checkoutButton" class="w-full bg-blue-600 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:bg-blue-700 transition-colors duration-300">
+                Accept & Pay Now
+            </button>
+        </div>
+        {% endif %}
+
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <h3 class="text-xl font-semibold text-gray-800">Need to make changes?</h3>
+            <p class="text-gray-600">
+                If the schedule preview does not look right, you can go back and upload an updated PDF.
+            </p>
+            <a href="{{ url_for('schedule_bp.upload_schedule_new') }}" class="mt-4 inline-block text-blue-600 hover:underline transition-colors duration-300">
+                Go back to upload page
+            </a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Flash message display
+            const flashMessage = document.querySelector('.flash-message');
+            if (flashMessage) {
+                setTimeout(() => {
+                    flashMessage.classList.remove('show');
+                }, 5000);
+            }
+
+            // Stripe Checkout Logic for returning users
+            const checkoutButton = document.getElementById('checkoutButton');
+            if (checkoutButton) {
+                const customerEmail = "{{ customer_email }}";
+                const stripePublicKey = "{{ stripe_public_key }}";
+                const stripe = Stripe(stripePublicKey);
+
+                checkoutButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    fetch('{{ url_for("schedule_bp.create_checkout_session_route") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ email: customerEmail }),
+                    })
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(session) {
+                        if (session.id) {
+                            stripe.redirectToCheckout({ sessionId: session.id });
+                        } else {
+                            console.error('Error creating Stripe session:', session.error);
+                            // Instead of alert(), use a more user-friendly message display
+                            const errorMessage = document.createElement('div');
+                            errorMessage.className = 'flash-message flash-error show';
+                            errorMessage.textContent = 'An error occurred during checkout. Please try again.';
+                            document.body.appendChild(errorMessage);
+                            setTimeout(() => errorMessage.classList.remove('show'), 5000);
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Network or fetch error:', error);
+                        // Instead of alert(), use a more user-friendly message display
+                        const errorMessage = document.createElement('div');
+                        errorMessage.className = 'flash-message flash-error show';
+                        errorMessage.textContent = 'A network error occurred. Please try again.';
+                        document.body.appendChild(errorMessage);
+                        setTimeout(() => errorMessage.classList.remove('show'), 5000);
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+

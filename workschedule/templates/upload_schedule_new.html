@@ -1,62 +1,160 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Schedule (New Workflow)</title>
+    <title>Upload Schedule</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        .custom-file-input {
+            width: 100%;
+            height: 48px;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+            display: inline-block;
+            border: 2px dashed #ccc;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+        .custom-file-input input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            height: 100%;
+            width: 100%;
+            cursor: pointer;
+        }
+        .custom-file-input-text {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: 1rem;
+            color: #6b7280;
+        }
+    </style>
 </head>
-<body class="bg-gray-50 antialiased">
-    <!-- Navigation Bar -->
-    <header class="bg-white shadow-sm sticky top-0 z-50">
-        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="text-2xl font-bold text-sky-600">
-                MySchedule.cloud
-            </div>
-            <div class="flex items-center space-x-6">
-                <a href="/index" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">Home</a>
-                <a href="#about-us" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">About Us</a>
-                <a href="/auth/login" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">Log In / Sign Up</a>
-            </div>
-        </nav>
-    </header>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center font-sans">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-2xl">
+        <h1 class="text-3xl font-bold text-center text-sky-700 mb-6">Upload New Schedule</h1>
+        
+        <!-- Flash messages display here -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="mb-4">
+                    {% for category, message in messages %}
+                        <li class="p-3 rounded-lg text-sm {% if category == 'success' %}bg-green-100 text-green-700{% elif category == 'error' %}bg-red-100 text-red-700{% endif %}">
+                            {{ message }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
 
-    <main class="flex flex-col items-center justify-center min-h-screen py-12">
-        <section class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg">
-            <h1 class="text-3xl font-extrabold text-sky-600 mb-4 text-center">Upload Your Workforce Schedule</h1>
-            <p class="text-gray-600 mb-6 text-center">Provide your Google Gmail address, timezone, and the Workforce schedule PDF file you wish to upload.</p>
-            <form action="/schedule/upload_pdf" method="post" enctype="multipart/form-data" class="space-y-6">
-                <div>
-                    <label for="email" class="block text-gray-700 font-semibold mb-2">Gmail Address</label>
-                    <input type="email" id="email" name="email" required class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500">
-                </div>
-                <div>
-                    <label for="timezone" class="block text-gray-700 font-semibold mb-2">Your Timezone</label>
-                    <select id="timezone" name="timezone" required class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500">
-                        <option value="" disabled selected>Select a timezone...</option>
-                        <option value="EST">Eastern Time (EST)</option>
-                        <option value="CST">Central Time (CST)</option>
-                        <option value="MST">Mountain Time (MST)</option>
-                        <option value="PST">Pacific Time (PST)</option>
-                        <option value="GMT">Greenwich Mean Time (GMT)</option>
-                        <option value="JST">Japan Standard Time (JST)</option>
-                        <option value="AEST">Australian Eastern Standard Time (AEST)</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="pdffile" class="block text-gray-700 font-semibold mb-2">Select PDF File</label>
-                    <input type="file" id="pdffile" name="pdffile" accept=".pdf" required class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500">
-                </div>
-                <div class="flex justify-center">
-                    <input type="submit" value="Upload Schedule" class="bg-sky-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-sky-700 transition-colors duration-300 transform hover:scale-105 cursor-pointer">
-                </div>
-            </form>
-            <div class="mt-8 flex flex-col items-center">
-                <a href="/schedule/download_ics" class="bg-green-500 text-white font-bold py-2 px-6 rounded-full shadow-lg hover:bg-green-600 transition-colors duration-300 transform hover:scale-105 mb-4">Download ICS Calendar</a>
-                <a href="/auth/dashboard" class="bg-gray-200 text-sky-600 font-bold py-2 px-6 rounded-full shadow-lg hover:bg-gray-300 transition-colors duration-300 transform hover:scale-105">Return to Dashboard</a>
+        <!-- Form for uploading PDF schedule -->
+        <form action="{{ url_for('schedule_bp.upload_pdf') }}" method="post" enctype="multipart/form-data" class="space-y-4">
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                <input type="email" id="email" name="email" required 
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 p-2 border">
             </div>
-        </section>
-    </main>
+
+            <div>
+                <label for="timezone" class="block text-sm font-medium text-gray-700">Time Zone</label>
+                <select id="timezone" name="timezone" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    <option value="" disabled selected>Select your time zone</option>
+                    <option value="PST">PST (Pacific Standard Time)</option>
+                    <option value="MST">MST (Mountain Standard Time)</option>
+                    <option value="CST">CST (Central Standard Time)</option>
+                    <option value="EST">EST (Eastern Standard Time)</option>
+                    <option value="GMT">GMT (Greenwich Mean Time)</option>
+                </select>
+            </div>
+
+            <div class="custom-file-input">
+                <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf" required>
+                <span class="custom-file-input-text">Click or drag a PDF file here</span>
+            </div>
+
+            <button type="submit" class="w-full bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-sky-700 transition-colors duration-300">
+                Upload Schedule
+            </button>
+        </form>
+
+        <hr class="my-8 border-gray-300">
+
+        <!-- Section for Stripe Payment -->
+        <div class="text-center space-y-4">
+            <h2 class="text-2xl font-bold text-sky-700">Unlock Premium Features</h2>
+            <p class="text-gray-600">Pay to process your schedule and unlock all our advanced tools.</p>
+            <p class="text-4xl font-extrabold text-sky-900">$10<span class="text-base font-normal text-gray-400">/mo</span></p>
+
+            <button id="checkout-button" class="w-full bg-green-600 text-white px-8 py-4 rounded-full font-semibold hover:bg-green-700 transition-colors duration-300">
+                Pay Now
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Use your real Stripe publishable key here.
+        // You can find this in your Stripe Dashboard.
+        const stripe = Stripe('pk_test_TYe0Pj8s47sV6R1l8jYl8p9G');
+
+        const fileInput = document.getElementById('pdfFile');
+        const fileInputText = document.querySelector('.custom-file-input-text');
+
+        fileInput.addEventListener('change', (event) => {
+            if (event.target.files.length > 0) {
+                fileInputText.textContent = event.target.files[0].name;
+                fileInput.parentNode.classList.add('border-sky-500');
+            } else {
+                fileInputText.textContent = 'Click or drag a PDF file here';
+                fileInput.parentNode.classList.remove('border-sky-500');
+            }
+        });
+
+        // Event listener for the new Stripe checkout button
+        const checkoutButton = document.getElementById('checkout-button');
+        const emailInput = document.getElementById('email');
+
+        checkoutButton.addEventListener('click', async () => {
+            const customerEmail = emailInput.value;
+
+            if (!customerEmail) {
+                alert('Please enter your email address to proceed.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/schedule/create-checkout-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: customerEmail }),
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create a Stripe session.');
+                }
+
+                const { id } = await response.json();
+
+                const result = await stripe.redirectToCheckout({
+                    sessionId: id,
+                });
+
+                if (result.error) {
+                    console.error(result.error.message);
+                    alert('An error occurred during checkout. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during checkout. Please try again.');
+            }
+        });
+    </script>
 </body>
 </html>
+
