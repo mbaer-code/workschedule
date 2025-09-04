@@ -10,4 +10,5 @@ firebase-admin
 google-cloud-documentai
 icalendar
 requests 
+stripe
 
