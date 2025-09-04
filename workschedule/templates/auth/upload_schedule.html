@@ -4,64 +4,78 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upload Schedule</title>
-    <!-- Link to your existing stylesheet for consistent look and feel -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .form-container {
+            max-width: 500px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .flash-message {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .flash-message.error {
+            background-color: #fee2e2;
+            color: #ef4444;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <h1>Upload Your Workforce Schedule File</h1>
-        <p>Provide your Google Gmail address, timezone, and the Workforce schedule '.pdf' file you wish to upload.</p>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="form-container">
+        <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Upload Schedule</h2>
 
-        {% if schedule_entries %}
-        <div class="matched-entries">
-            <h2>Matched Schedule Entries</h2>
-            <ul>
-            {% for entry in schedule_entries %}
-                <li>
-                    Date: {{ entry.date }}<br>
-                    Start: {{ entry.start_time }}<br>
-                    End: {{ entry.end_time }}<br>
-                    Role: {{ entry.role }}<br>
-                    Department: {{ entry.department }}<br>
-                </li>
-            {% endfor %}
-            </ul>
-        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="flash-message {{ category }}">{{ message }}</div>
+        {% endfor %}
         {% endif %}
-        <form action="/schedule/upload_pdf" method="post" enctype="multipart/form-data">
-            <!-- Email Input -->
-            <label for="email">Gmail Address:</label>
-            <input type="email" id="email" name="email" required>
-            <br><br>
-            <!-- Timezone Selection -->
-            <label for="timezone">Your Timezone:</label>
-            <select id="timezone" name="timezone" required>
-                <option value="" disabled selected>Select a timezone...</option>
-                <option value="EST">Eastern Time (EST)</option>
-                <option value="CST">Central Time (CST)</option>
-                <option value="MST">Mountain Time (MST)</option>
-                <option value="PST">Pacific Time (PST)</option>
-                <option value="GMT">Greenwich Mean Time (GMT)</option>
-                <option value="JST">Japan Standard Time (JST)</option>
-                <option value="AEST">Australian Eastern Standard Time (AEST)</option>
-            </select>
-            <br><br>
-            <!-- File Upload Input -->
-            <label for="pdfFile">Select PDF File:</label>
-            <input type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
-            <br><br>
-            <input type="submit" value="Upload Schedule">
-        </form>
+        {% endwith %}
 
-        <div style="margin-top: 24px;">
-            <a href="/schedule/download_ics" class="button" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Download ICS Calendar</a>
-        </div>
-        <div style="margin-top: 16px;">
-            <p><a href="/auth/dashboard" class="button">Return to Dashboard</a></p>
-            <p><a href="/auth/logout" class="button">Logout</a></p>
-        </div>
+        <form action="{{ url_for('schedule_bp.upload_pdf') }}" method="post" enctype="multipart/form-data" class="space-y-6">
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                <input type="email" id="email" name="email" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="timezone" class="block text-sm font-medium text-gray-700">Time Zone</label>
+                <select id="timezone" name="timezone" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    <option value="" disabled selected>Select your time zone</option>
+                    <option value="PST">PST (Pacific Standard Time)</option>
+                    <option value="MST">MST (Mountain Standard Time)</option>
+                    <option value="CST">CST (Central Standard Time)</option>
+                    <option value="EST">EST (Eastern Standard Time)</option>
+                    <option value="GMT">GMT (Greenwich Mean Time)</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="pdfFile" class="block text-sm font-medium text-gray-700">Select PDF File</label>
+                <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf" required class="mt-1 block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100">
+            </div>
+
+            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                Upload Schedule
+            </button>
+        </form>
     </div>
 </body>
-            </form>
 </html>
 

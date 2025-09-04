@@ -1,5 +1,5 @@
 # workschedule-cloud/src/models.py
-from .__init__ import db # Correctly imports the SQLAlchemy db instance
+from workschedule.app import db # Correctly imports the SQLAlchemy db instance
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
