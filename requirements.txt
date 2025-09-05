@@ -11,4 +11,5 @@ google-cloud-documentai
 icalendar
 requests 
 stripe
+pytest
 

@@ -1,0 +1,7 @@
+
+
+
+# start the venv with 'source venv/Scripts/activage'
+
+python -m workschedule.wsgi
+
