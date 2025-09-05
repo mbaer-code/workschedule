@@ -68,15 +68,9 @@ def upload_pdf():
     docai_client = documentai.DocumentProcessorServiceClient()
     docai_request = {
         "name": f"projects/{project_id}/locations/{location}/processors/{processor_id}",
-        "input_documents": {
-            "gcs_documents": {
-                "documents": [
-                    {
-                        "gcs_uri": gcs_input_uri,
-                        "mime_type": "application/pdf"
-                    }
-                ]
-            }
+        "gcs_document": {
+            "gcs_uri": gcs_input_uri,
+            "mime_type": "application/pdf"
         }
     }
     try:
