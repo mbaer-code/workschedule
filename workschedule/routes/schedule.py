@@ -4,6 +4,7 @@ import requests
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app
 from werkzeug.utils import secure_filename
 from google.cloud import storage, documentai_v1 as documentai
+from google.protobuf.json_format import MessageToDict
 from datetime import datetime
 from workschedule.services.mailgun_service import send_simple_message
 from workschedule.services.calendar_service import generate_ics_file
@@ -78,7 +79,18 @@ def upload_pdf():
         entities = [entity for entity in result.document.entities]
         # You may want to use your custom parsing logic here
         # For now, just convert entities to dicts
-        parsed_entities = [documentai.types.Entity.to_dict(entity) for entity in entities]
+        try:
+            parsed_entities = [MessageToDict(entity, including_default_value_fields=False, preserving_proto_field_name=True, use_integers_for_enums=True) for entity in entities]
+        except Exception:
+            # Fallback: extract only useful fields
+            parsed_entities = [
+                {
+                    "type": getattr(entity, "type_", None),
+                    "mention_text": getattr(entity, "mention_text", None),
+                    "confidence": getattr(entity, "confidence", None)
+                }
+                for entity in entities
+            ]
         # Save or display the JSON schedule
         return render_template("review_schedule.html", schedule_json=parsed_entities)
     except Exception as e:
