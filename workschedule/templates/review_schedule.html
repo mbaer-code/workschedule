@@ -1,3 +1,5 @@
+<h2>Raw Document AI JSON Output</h2>
+<pre>{{ raw_json }}</pre>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,7 +12,34 @@
     <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-3xl">
         <h1 class="text-3xl font-bold text-center text-sky-700 mb-6">Review Parsed Schedule</h1>
         <div class="overflow-x-auto">
-            <pre class="bg-gray-50 p-4 rounded-lg text-sm text-gray-800">{{ schedule_json | tojson(indent=2) }}</pre>
+            <table class="min-w-full bg-white border rounded-lg mt-4">
+                <thead>
+                    <tr>
+                        <th class="py-2 px-4 border-b">Work Shift</th>
+                        <th class="py-2 px-4 border-b">Department</th>
+                        <th class="py-2 px-4 border-b">Shift Date</th>
+                        <th class="py-2 px-4 border-b">Start</th>
+                        <th class="py-2 px-4 border-b">End</th>
+                        <th class="py-2 px-4 border-b">Meal Start</th>
+                        <th class="py-2 px-4 border-b">Meal End</th>
+                        <th class="py-2 px-4 border-b">Store Number</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in parsed_schedule %}
+                    <tr>
+                        <td class="py-2 px-4 border-b">{{ item.work_shift }}</td>
+                        <td class="py-2 px-4 border-b">{{ item.department }}</td>
+                        <td class="py-2 px-4 border-b">{{ item.shift-date }}</td>
+                        <td class="py-2 px-4 border-b">{{ item.start-start }}</td>
+                        <td class="py-2 px-4 border-b">{{ item.shift-end }}</td>
+                        <td class="py-2 px-4 border-b">{{ item.meal-start }}</td>
+                        <td class="py-2 px-4 border-b">{{ item.meal-end }}</td>
+                        <td class="py-2 px-4 border-b">{{ item.store-number }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         <div class="mt-6 text-center">
             <a href="/schedule/upload_schedule_new" class="text-sky-600 hover:underline">Upload another PDF</a>

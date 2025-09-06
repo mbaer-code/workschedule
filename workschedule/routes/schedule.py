@@ -1,14 +1,14 @@
+# schedule.py
+
 import os
-import uuid
-import requests
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
-from google.cloud import storage, documentai_v1 as documentai
-from google.protobuf.json_format import MessageToDict
-from datetime import datetime
-from workschedule.services.mailgun_service import send_simple_message
-from workschedule.services.calendar_service import generate_ics_file
+from src.services.documentai_processor import process_pdf_documentai_from_bytes
 from workschedule.services.stripe_service import create_checkout_session
+import os
+from werkzeug.utils import secure_filename
+from src.services.documentai_processor import process_pdf_documentai_from_bytes
+# ... other imports
 
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
@@ -20,8 +20,9 @@ def upload_schedule_new():
 
 @schedule_bp.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
+    import json
     """
-    Handles the PDF upload, processes it, and generates a calendar file.
+    Handles the PDF upload, processes it in memory, and generates a calendar file.
     """
     # Use Flask's request object directly, do not shadow it
     if 'pdfFile' not in request.files:
@@ -44,58 +45,47 @@ def upload_pdf():
     if not pdf_file.filename.lower().endswith('.pdf'):
         print("Invalid file type. Please upload a PDF.")
         return redirect(url_for('schedule_bp.upload_schedule_new'))
-
-    filename = secure_filename(f"{uuid.uuid4()}_{pdf_file.filename}")
     
-    # Save PDF to GCS
-    gcs_bucket_name = os.getenv("GCS_BUCKET_NAME", "work-schedule-cloud")
+    # Read the file's content into memory. This is safe for a 22 KB file.
     try:
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(gcs_bucket_name)
-        blob = bucket.blob(filename)
-        pdf_file.seek(0)
-        blob.upload_from_file(pdf_file, content_type='application/pdf')
-        print(f"File {filename} uploaded to GCS.")
+        pdf_contents = pdf_file.read()
     except Exception as e:
-        print(f"Error uploading file to GCS: {e}")
+        print(f"Error reading file contents: {e}")
         return redirect(url_for('schedule_bp.upload_schedule_new'))
-
-    # Call Document AI
-    project_id = os.getenv("DOCUMENT_AI_PROJECT", "fe0baaa28beedbe")
-    location = os.getenv("DOCUMENT_AI_LOCATION", "us")
-    processor_id = os.getenv("DOCUMENT_AI_PROCESSOR_ID", "fe0baaa28beedbe9")
-    gcs_input_uri = f"gs://{gcs_bucket_name}/{filename}"
-
-    docai_client = documentai.DocumentProcessorServiceClient()
-    docai_request = {
-        "name": f"projects/{project_id}/locations/{location}/processors/{processor_id}",
-        "gcs_document": {
-            "gcs_uri": gcs_input_uri,
-            "mime_type": "application/pdf"
-        }
-    }
+    
+    # Call the new processor function that works on bytes
     try:
-        result = docai_client.process_document(request=docai_request)
-        entities = [entity for entity in result.document.entities]
-        # You may want to use your custom parsing logic here
-        # For now, just convert entities to dicts
-        try:
-            parsed_entities = [MessageToDict(entity, including_default_value_fields=False, preserving_proto_field_name=True, use_integers_for_enums=True) for entity in entities]
-        except Exception:
-            # Fallback: extract only useful fields
-            parsed_entities = [
-                {
-                    "type": getattr(entity, "type_", None),
-                    "mention_text": getattr(entity, "mention_text", None),
-                    "confidence": getattr(entity, "confidence", None)
-                }
-                for entity in entities
-            ]
-        # Save or display the JSON schedule
-        return render_template("review_schedule.html", schedule_json=parsed_entities)
+        extracted_text, entities = process_pdf_documentai_from_bytes(pdf_contents)
+
+        # Build structured schedule grouped by work shift
+        schedule = []
+        current_shift = {}
+        debug_log_path = os.path.join('instance', 'documentai_debug.log')
+        with open(debug_log_path, 'a', encoding='utf-8') as f:
+            if entities:
+                for ent in entities:
+                    entity_type = getattr(ent, 'type_', '').lower() if hasattr(ent, 'type_') else str(ent)
+                    value = getattr(ent, 'mention_text', '') if hasattr(ent, 'mention_text') else str(ent)
+                    f.write(f"Entity type: {entity_type}, value: {value}\n")
+                    if entity_type == 'work-shift':
+                        if current_shift:
+                            schedule.append(current_shift)
+                        current_shift = {'work_shift': value}
+                    elif entity_type in [
+                        'department', 'meal-end', 'meal-start', 'shift-date',
+                        'shift-end', 'start-start', 'store-number'
+                    ]:
+                        current_shift[entity_type] = value
+                if current_shift:
+                    schedule.append(current_shift)
+                raw_json = json.dumps(schedule, indent=2)
+            else:
+                raw_json = "No schedule data found or document could not be processed."
+        return render_template("review_schedule.html", raw_json=raw_json, parsed_schedule=schedule)
     except Exception as e:
         print(f"Error processing PDF with Document AI: {e}")
-        return redirect(url_for('schedule_bp.upload_schedule_new'))
+        error_message = "No schedule data found or document could not be processed."
+        return render_template("review_schedule.html", raw_json=error_message)
 
 @schedule_bp.route('/download/<job_id>', methods=['GET'])
 def download_file(job_id):
@@ -107,15 +97,14 @@ def download_file(job_id):
 def create_session():
     # Placeholder for the Stripe price ID
     price_id = os.getenv("STRIPE_PRICE_ID")
-    
+
     # The customer's email would be passed from the front end.
     # For this example, we use a placeholder.
     customer_email = "test.user@example.com"
-    
+
     session = create_checkout_session(price_id, customer_email)
-    
+
     if session:
         return jsonify({'id': session.id})
     else:
         return jsonify({'error': 'Failed to create checkout session'}), 500
-
