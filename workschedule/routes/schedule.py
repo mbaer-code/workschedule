@@ -1,17 +1,30 @@
 # schedule.py
 
 import os
+import datetime
+import json
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
 from workschedule.services.stripe_service import create_checkout_session
-import os
-from werkzeug.utils import secure_filename
-from src.services.documentai_processor import process_pdf_documentai_from_bytes
-# ... other imports
 
+# Create a Blueprint for schedule-related routes
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
+
+def entity_to_dict(entity):
+    """Recursively converts a Document AI entity to a dictionary."""
+    entity_dict = {
+        'type_': entity.type_,
+        'mention_text': entity.mention_text,
+        'confidence': entity.confidence,
+        'page_anchor': entity.page_anchor.page_refs[0].page if entity.page_anchor.page_refs else None,
+        'properties': []
+    }
+    if entity.properties:
+        for prop in entity.properties:
+            entity_dict['properties'].append(entity_to_dict(prop))
+    return entity_dict
 
 @schedule_bp.route("/upload_schedule_new", methods=["GET"])
 def upload_schedule_new():
@@ -20,13 +33,10 @@ def upload_schedule_new():
 
 @schedule_bp.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
-    import json
     """
-    Handles the PDF upload, processes it in memory, and generates a calendar file.
+    Handles the PDF upload, processes it, and displays the schedule on the webpage.
     """
-    # Use Flask's request object directly, do not shadow it
     if 'pdfFile' not in request.files:
-        print("Missing fields in form submission: pdfFile")
         return redirect(url_for('schedule_bp.upload_schedule_new'))
 
     pdf_file = request.files['pdfFile']
@@ -34,74 +44,100 @@ def upload_pdf():
     timezone = request.form.get('timezone')
 
     if not all([pdf_file, email, timezone]):
-        print("Missing fields in form submission")
         return redirect(url_for('schedule_bp.upload_schedule_new'))
 
     if pdf_file.filename == '':
-        print("No selected file")
         return redirect(url_for('schedule_bp.upload_schedule_new'))
 
-    # Check if the file is a PDF
     if not pdf_file.filename.lower().endswith('.pdf'):
-        print("Invalid file type. Please upload a PDF.")
         return redirect(url_for('schedule_bp.upload_schedule_new'))
     
-    # Read the file's content into memory. This is safe for a 22 KB file.
     try:
         pdf_contents = pdf_file.read()
     except Exception as e:
         print(f"Error reading file contents: {e}")
         return redirect(url_for('schedule_bp.upload_schedule_new'))
     
-    # Call the new processor function that works on bytes
     try:
         extracted_text, entities = process_pdf_documentai_from_bytes(pdf_contents)
 
-        # Build structured schedule grouped by work shift
-        schedule = []
-        current_shift = {}
-        debug_log_path = os.path.join('instance', 'documentai_debug.log')
-        with open(debug_log_path, 'a', encoding='utf-8') as f:
-            if entities:
-                for ent in entities:
-                    entity_type = getattr(ent, 'type_', '').lower() if hasattr(ent, 'type_') else str(ent)
-                    value = getattr(ent, 'mention_text', '') if hasattr(ent, 'mention_text') else str(ent)
-                    f.write(f"Entity type: {entity_type}, value: {value}\n")
-                    if entity_type == 'work-shift':
-                        if current_shift:
-                            schedule.append(current_shift)
-                        current_shift = {'work_shift': value}
-                    elif entity_type in [
-                        'department', 'meal-end', 'meal-start', 'shift-date',
-                        'shift-end', 'start-start', 'store-number'
-                    ]:
-                        current_shift[entity_type] = value
-                if current_shift:
-                    schedule.append(current_shift)
-                raw_json = json.dumps(schedule, indent=2)
-            else:
-                raw_json = "No schedule data found or document could not be processed."
-        return render_template("review_schedule.html", raw_json=raw_json, parsed_schedule=schedule)
+        if not entities:
+            error_message = "No schedule data found or document could not be processed."
+            return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
+
+        # 1. Extract only valid work shifts
+        parsed_shifts = []
+        for entity in entities:
+            if entity.type_ == "Work-shift":
+                properties = {prop.type_: prop.mention_text.strip() for prop in entity.properties}
+                
+                # Check for core properties to ensure it's a complete shift
+                if all(field in properties for field in ['Shift-date', 'Shift-end', 'Start-start', 'Department', 'Store-number']):
+                    
+                    shift_date_raw = properties.get('Shift-date', '')
+                    
+                    try:
+                        date_str = shift_date_raw.replace('\n', ' ').strip()
+                        parsed_date = datetime.datetime.strptime(date_str, '%b %d').date().replace(year=datetime.date.today().year)
+                        
+                        # Get the department value and remove "Associate" if it exists
+                        department_name = properties.get('Department', '')
+                        if department_name.endswith(' Associate'):
+                            department_name = department_name[:-len(' Associate')]
+                        
+                        parsed_shifts.append({
+                            'shift_date': parsed_date,
+                            'department': department_name,
+                            'shift_start': properties.get('Start-start'),
+                            'shift_end': properties.get('Shift-end'),
+                            'store_number': properties.get('Store-number')
+                        })
+                    except ValueError:
+                        continue # Silently ignore shifts with unparsable dates
+
+        # 2. Sort the list of shifts chronologically
+        parsed_shifts.sort(key=lambda x: x['shift_date'])
+
+        # 3. Format the dates and prepare the final list for the template
+        final_output = []
+        for shift in parsed_shifts:
+            shift_date = shift.pop('shift_date')
+            final_output.append({
+                'shift_date': shift_date.strftime('%a, %b %d'),
+                **shift
+            })
+            
+        # The key for store number is changed here to 'store' instead of 'store_number'
+        for entry in final_output:
+            if 'store_number' in entry:
+                entry['store'] = entry.pop('store_number')
+
+        # Prepare data for the HTML template
+        entities_as_dicts = [entity_to_dict(entity) for entity in entities]
+        formatted_json = json.dumps(entities_as_dicts, indent=4)
+
+        # Return the parsed data to the HTML template for display
+        return render_template(
+            'review_schedule.html',
+            parsed_schedule=final_output,
+            formatted_json=formatted_json
+        )
+
     except Exception as e:
-        print(f"Error processing PDF with Document AI: {e}")
-        error_message = "No schedule data found or document could not be processed."
+        print(f"An error occurred during parsing: {e}")
+        error_message = f"An error occurred: {e}"
         return render_template("review_schedule.html", raw_json=error_message)
 
 @schedule_bp.route('/download/<job_id>', methods=['GET'])
 def download_file(job_id):
-    # This is a placeholder for a real download function.
-    # In a real app, you would generate or retrieve the .ics file here.
+    """Placeholder for file download."""
     return render_template('download_page.html', job_id=job_id)
 
 @schedule_bp.route('/create-checkout-session', methods=['POST'])
 def create_session():
-    # Placeholder for the Stripe price ID
+    """Placeholder for Stripe checkout session creation."""
     price_id = os.getenv("STRIPE_PRICE_ID")
-
-    # The customer's email would be passed from the front end.
-    # For this example, we use a placeholder.
     customer_email = "test.user@example.com"
-
     session = create_checkout_session(price_id, customer_email)
 
     if session:
