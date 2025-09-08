@@ -1,3 +1,100 @@
+# Stripe webhook endpoint to handle payment success
+from flask import request, abort
+import os
+import datetime
+import json
+import stripe
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify
+from werkzeug.utils import secure_filename
+from src.services.documentai_processor import process_pdf_documentai_from_bytes
+from workschedule.services.stripe_service import create_checkout_session
+
+# Create a Blueprint for schedule-related routes
+schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
+                        template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
+
+# Stripe webhook endpoint to handle payment success
+
+@schedule_bp.route('/stripe_webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.data
+    sig_header = request.headers.get('Stripe-Signature')
+    webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
+    event = None
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, webhook_secret
+        )
+    except ValueError as e:
+        # Invalid payload
+        print(f"Stripe webhook error: {e}")
+        return abort(400)
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        print(f"Stripe webhook signature error: {e}")
+        return abort(400)
+
+    # Handle the checkout.session.completed event
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        customer_email = session.get('customer_email')
+        # TODO: Generate ICS file and send Mailgun email to customer_email
+        print(f"Payment succeeded for {customer_email}. Trigger ICS and email.")
+
+    return '', 200
+
+# ...existing code...
+
+@schedule_bp.route('/stripe_webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.data
+    sig_header = request.headers.get('Stripe-Signature')
+    webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
+    event = None
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, webhook_secret
+        )
+    except ValueError as e:
+        # Invalid payload
+        print(f"Stripe webhook error: {e}")
+        return abort(400)
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        print(f"Stripe webhook signature error: {e}")
+        return abort(400)
+
+    # Handle the checkout.session.completed event
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        customer_email = session.get('customer_email')
+        # TODO: Generate ICS file and send Mailgun email to customer_email
+        print(f"Payment succeeded for {customer_email}. Trigger ICS and email.")
+
+    return '', 200
+import os
+import datetime
+import json
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify
+from werkzeug.utils import secure_filename
+from src.services.documentai_processor import process_pdf_documentai_from_bytes
+from workschedule.services.stripe_service import create_checkout_session
+
+# Create a Blueprint for schedule-related routes
+schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
+                        template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
+
+@schedule_bp.route('/approve_schedule', methods=['POST'])
+@schedule_bp.route('/approve_schedule', methods=['POST'])
+def approve_schedule():
+    # For now, re-parse the schedule from the last upload (could use session or persistent storage)
+    # You may want to store the parsed schedule in the session for a real flow
+    # Here, we just use the last parsed schedule from the upload_pdf route
+    # This is a placeholder for demonstration
+    # You can pass the parsed_schedule as a hidden field in the form if needed
+    # For now, redirect to Stripe payment page
+    stripe_session = create_checkout_session(amount=499, currency='usd', description='Schedule ICS File')
+    return redirect(stripe_session.url)
 # schedule.py
 
 import os
