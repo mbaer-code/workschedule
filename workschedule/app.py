@@ -120,6 +120,10 @@ def create_app():
     app.register_blueprint(schedule_bp)
     app.register_blueprint(auth_bp)
 
+    # Print all registered routes for debugging
+    for rule in app.url_map.iter_rules():
+        print(rule)
+
     # --- NEW ROUTES FOR PDF UPLOAD ---
     # These routes are part of the main app, not a blueprint.
     
@@ -183,10 +187,34 @@ def create_app():
         # Placeholder for your dashboard logic
         return "Dashboard page"
     
+    # --- DEBUGGING ROUTE: Direct registration for easier debugging ---
+    # NOTE: Remove this and return to blueprint once code is running
+    @app.route('/schedule/approve_schedule', methods=['POST'])
+    def debug_approve_schedule():
+        import os
+        print("STRIPE_SECRET_KEY:", os.getenv("STRIPE_SECRET_KEY"))
+        print("STRIPE_PRICE_ID:", os.getenv("STRIPE_PRICE_ID"))
+        print("Direct approve_schedule route hit")
+        from flask import session, redirect, render_template
+        from workschedule.services.stripe_service import create_checkout_session
+        parsed_schedule = session.get('parsed_schedule')
+        if not parsed_schedule:
+            # Try to recover from previous session or set a default message
+            parsed_schedule = []
+        price_id = os.getenv("STRIPE_PRICE_ID")
+        customer_email = "test.user@example.com"
+        stripe_session = create_checkout_session(price_id, customer_email)
+        if not stripe_session or not hasattr(stripe_session, 'url'):
+            error_message = "Stripe session could not be created. Please try again later."
+            return render_template("review_schedule.html", parsed_schedule=parsed_schedule, raw_json=error_message)
+        return redirect(stripe_session.url)
+    # --- END DEBUGGING ROUTE ---
+
     return app
 
 # Gunicorn (used by Cloud Run) will look for a top-level 'app' object.
 app = create_app()
 
 logging.debug("App factory finished. App instance created.")
+print("app.py loaded")
 

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Load environment variables from a .env file
 load_dotenv()
 
-def send_simple_message(to_email, subject, text_content, html_content=None):
+def send_simple_message(to_email, subject, text_content, html_content=None, attachment_bytes=None, attachment_filename=None):
     """
     Sends an email using the Mailgun API.
     
@@ -37,11 +37,18 @@ def send_simple_message(to_email, subject, text_content, html_content=None):
     if html_content:
         data["html"] = html_content
 
+    files = None
+    if attachment_bytes and attachment_filename:
+        files = [
+            ("attachment", (attachment_filename, attachment_bytes, "text/calendar"))
+        ]
+
     try:
         response = requests.post(
             api_url,
             auth=("api", mailgun_api_key),
-            data=data
+            data=data,
+            files=files
         )
         response.raise_for_status()  # Raises an HTTPError for bad responses
         print(f"Email sent successfully to {to_email}. Status code: {response.status_code}")

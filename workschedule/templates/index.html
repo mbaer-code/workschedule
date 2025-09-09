@@ -49,7 +49,6 @@
             <div class="flex items-center space-x-6">
                 <a href="#about-us" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">About Us</a>
                 <a id="auth-link" href="#" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">
-                    Log In / Sign Up
                 </a>
                 <a href="/schedule/upload_schedule_new" class="bg-sky-600 text-white px-5 py-2 rounded-full font-semibold hover:bg-sky-700 transition-colors duration-300">
                     Upload
@@ -65,7 +64,7 @@
             <section class="bg-sky-600 text-white py-16 md:py-24 text-center rounded-b-3xl">
                 <div class="container mx-auto px-6">
                     <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold mb-4 leading-tight">
-                        Cloud your <span class="text-orange-300">Home Depot</span> schedule and keep it fresh for $0.99!
+                        Post your <span class="text-orange-300">Workforce</span> schedule to the cloud for $4.99!
                     </h1>
                     <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 opacity-90">
                         Having your schedule in the cloud makes it so easy to plan out your week and share your schedule with friends, family and co-workers. And of course it works really great for getting you to work on time!
@@ -222,10 +221,10 @@
             };
 
             const showLandingPage = () => {
-                landingPage.classList.remove('hidden');
-                dashboard.classList.add('hidden');
-                authLink.textContent = 'Log In / Sign Up';
-                authLink.onclick = () => loginModal.style.display = 'flex';
+               landingPage.classList.remove('hidden');
+               dashboard.classList.add('hidden');
+               authLink.textContent = 'Log In / Sign Up';
+               authLink.onclick = () => loginModal.style.display = 'flex';
             };
 
             const showDashboard = () => {

@@ -1,10 +1,39 @@
+    # ...existing code...
+
+# Create a Blueprint for schedule-related routes
+schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
+                        template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
+
+# ...existing code...
+
+@schedule_bp.route('/test_stripe_checkout', methods=['GET'])
+def test_stripe_checkout():
+    # Get price ID and success/cancel URLs from environment
+    price_id = os.getenv('STRIPE_PRICE_ID')
+    success_url = os.getenv('STRIPE_SUCCESS_URL')
+    cancel_url = os.getenv('STRIPE_CANCEL_URL')
+    customer_email = 'test@example.com'  # Use a test email
+
+    from workschedule.services.stripe_service import create_checkout_session
+    session = create_checkout_session(price_id, customer_email)
+    if session and hasattr(session, 'url'):
+        return redirect(session.url)
+    else:
+        return 'Stripe session creation failed. Check your price ID and environment variables.', 500
+# Stripe webhook endpoint to handle payment success
 from flask import request, abort
 import os
 import datetime
 import json
-from flask import session
+import stripe
+import os
+import datetime
+import json
 import stripe
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
+from werkzeug.utils import secure_filename
+from src.services.documentai_processor import process_pdf_documentai_from_bytes
+from workschedule.services.stripe_service import create_checkout_session
 from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
 from workschedule.services.stripe_service import create_checkout_session
@@ -13,43 +42,7 @@ from workschedule.services.stripe_service import create_checkout_session
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
 
-# ...existing code...
-
-# Export to Calendar route
-@schedule_bp.route('/export_calendar', methods=['POST'])
-def export_calendar():
-    from workschedule.services.ics_generator import extract_shifts_from_docai_entities, create_ics_from_entries
-    from workschedule.services.mailgun_service import send_simple_message
-    from flask import make_response, request
-    parsed_schedule = session.get('parsed_schedule')
-    if not parsed_schedule:
-        return render_template('review_schedule.html', parsed_schedule=[], raw_json='No schedule data to export.')
-
-    shift_entries = extract_shifts_from_docai_entities(parsed_schedule)
-    calendar_name = request.form.get('calendar_name', 'myschedule.cloud')
-    timezone = request.form.get('timezone', 'America/Los_Angeles')
-    email = request.form.get('email')
-    ics_content = create_ics_from_entries(shift_entries, calendar_name=calendar_name)
-    # If your ICS generator supports time zone, pass it here (update function signature if needed)
-
-    # Send ICS file via Mailgun
-    subject = f"Your {calendar_name} Schedule ICS File"
-    text_content = "Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook."
-    success = send_simple_message(
-        to_email=email,
-        subject=subject,
-        text_content=text_content,
-        html_content=None,
-        attachment_bytes=ics_content.encode('utf-8'),
-        attachment_filename=f"{calendar_name}.ics"
-    )
-
-    if success:
-        success_message = f"ICS file sent to {email}. Check your inbox!"
-    else:
-        success_message = f"Failed to send ICS file to {email}. Please try again."
-
-    return render_template('review_schedule.html', parsed_schedule=parsed_schedule, raw_json=success_message)
+# Stripe webhook endpoint to handle payment success
 
 @schedule_bp.route('/stripe_webhook', methods=['POST'])
 def stripe_webhook():
@@ -121,6 +114,7 @@ schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
 
 @schedule_bp.route('/approve_schedule', methods=['POST'])
+@schedule_bp.route('/approve_schedule', methods=['POST'])
 def approve_schedule():
     # For now, re-parse the schedule from the last upload (could use session or persistent storage)
     # You may want to store the parsed schedule in the session for a real flow
@@ -128,14 +122,7 @@ def approve_schedule():
     # This is a placeholder for demonstration
     # You can pass the parsed_schedule as a hidden field in the form if needed
     # For now, redirect to Stripe payment page
-    # Retrieve parsed schedule from session
-    print("approve_schedule route registered")
-    parsed_schedule = session.get('parsed_schedule')
-    # TODO: Use parsed_schedule to generate ICS file after payment
     stripe_session = create_checkout_session(amount=499, currency='usd', description='Schedule ICS File')
-    if not stripe_session or not hasattr(stripe_session, 'url'):
-        error_message = "Stripe session could not be created. Please try again later."
-        return render_template("review_schedule.html", parsed_schedule=parsed_schedule or [], raw_json=error_message)
     return redirect(stripe_session.url)
 # schedule.py
 
@@ -283,12 +270,3 @@ def create_session():
         return jsonify({'id': session.id})
     else:
         return jsonify({'error': 'Failed to create checkout session'}), 500
-
-# Stripe payment success and cancel endpoints
-@schedule_bp.route('/payment_success', methods=['GET'])
-def payment_success():
-    return render_template('payment_success.html')
-
-@schedule_bp.route('/payment_cancel', methods=['GET'])
-def payment_cancel():
-    return render_template('payment_cancel.html')
