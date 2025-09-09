@@ -16,36 +16,19 @@ logging.basicConfig(
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from flask import Flask
-from workschedule.app import app
-from workschedule.routes.auth import auth_bp
-from workschedule.routes.schedule import schedule_bp
+from workschedule.app import create_app
 
 # Create the Flask application instance.
-# We explicitly set the template_folder and static_folder to point to their
-# respective directories relative to the main application file.
-# This fixes the "TemplateNotFound" error by telling Flask where to look for your
-# HTML and asset files.
-app = Flask(
-    __name__,
-    template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates')),
-    static_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'static'))
-)
+app = create_app()
 
 # Set a secret key for session management.
 # It's best practice to load this from an environment variable for security.
 # This fixes the "RuntimeError: The session is unavailable" issue.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fallback_key")
 
-# Register the authentication blueprint with the application.
-app.register_blueprint(auth_bp)
-app.register_blueprint(schedule_bp)
+# Blueprints are registered in create_app(), do not register here.
 
-
-# The following root route renders index.html
-@app.route('/')
-def index():
-    from flask import render_template
-    return render_template('index.html')
+# Root route is defined in app.py, do not define here.
 
 # This block is required to run the development server.
 # The `if __name__ == '__main__':` check ensures that the server only runs
