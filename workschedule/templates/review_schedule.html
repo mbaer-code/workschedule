@@ -18,8 +18,8 @@
                             <th class="py-2 px-4 border-b">Shift Date</th>
                             <th class="py-2 px-4 border-b">Start</th>
                             <th class="py-2 px-4 border-b">End</th>
-                            <th class="py-2 px-4 border-b">Department</th>
-                            <th class="py-2 px-4 border-b">Store Number</th>
+                            <th class="py-2 px-4 border-b">Dept</th>
+                            <th class="py-2 px-4 border-b">Store</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -29,7 +29,7 @@
                             <td class="py-2 px-4 border-b">{{ item.get('shift_start', 'N/A') }}</td>
                             <td class="py-2 px-4 border-b">{{ item.get('shift_end', 'N/A') }}</td>
                             <td class="py-2 px-4 border-b">{{ item.get('department', 'N/A') }}</td>
-                            <td class="py-2 px-4 border-b">{{ item.get('store_number', 'N/A') }}</td>
+                            <td class="py-2 px-4 border-b">{{ item.get('store_number') if item.get('store_number') and item.get('store_number') != 'N/A' else '1234' }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -40,7 +40,7 @@
         {% endif %}
 
         <div class="mt-6 text-center flex flex-col gap-4">
-            <form action="/schedule/approve_schedule" method="post">
+            <form action="{{ url_for('schedule_bp.approve_schedule') }}" method="post">
                 <input type="hidden" name="job_id" value="{{ job_id }}" />
                 <button type="submit" class="bg-sky-600 text-white px-6 py-2 rounded hover:bg-sky-700 font-semibold">Approve &amp; Continue</button>
             </form>

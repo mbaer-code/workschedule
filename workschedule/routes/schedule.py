@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
 from workschedule.services.stripe_service import create_checkout_session
 
-# Create a Blueprint for schedule-related routes
+ # Create a Blueprint for schedule-related routes
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
 
@@ -77,28 +77,6 @@ def stripe_webhook():
 
     return '', 200
 
-# --- DEBUGGING ROUTE: Direct registration for easier debugging ---
-# NOTE: Remove this and return to blueprint once code is running
-@schedule_bp.route('/approve_schedule', methods=['POST'])
-def debug_approve_schedule():
-    import os
-    print("STRIPE_SECRET_KEY:", os.getenv("STRIPE_SECRET_KEY"))
-    print("STRIPE_PRICE_ID:", os.getenv("STRIPE_PRICE_ID"))
-    print("Direct approve_schedule route hit")
-    from flask import session, redirect, render_template
-    from workschedule.services.stripe_service import create_checkout_session
-    parsed_schedule = session.get('parsed_schedule')
-    if not parsed_schedule:
-        # Try to recover from previous session or set a default message
-        parsed_schedule = []
-    price_id = os.getenv("STRIPE_PRICE_ID")
-    customer_email = "test.user@example.com"
-    stripe_session = create_checkout_session(price_id, customer_email)
-    if not stripe_session or not hasattr(stripe_session, 'url'):
-        error_message = "Stripe session could not be created. Please try again later."
-        return render_template("review_schedule.html", parsed_schedule=parsed_schedule, raw_json=error_message)
-    return redirect(stripe_session.url)
-# --- END DEBUGGING ROUTE ---
 
 @schedule_bp.route('/approve_schedule', methods=['POST'])
 def approve_schedule():
@@ -109,12 +87,16 @@ def approve_schedule():
     # You can pass the parsed_schedule as a hidden field in the form if needed
     # For now, redirect to Stripe payment page
     # Retrieve parsed schedule from session
-    print("approve_schedule route registered")
+    print("[DEBUG] approve_schedule route registered")
+    print(f"[DEBUG] request.method: {request.method}")
+    print(f"[DEBUG] request.form: {request.form}")
+    print(f"[DEBUG] request.args: {request.args}")
+    print(f"[DEBUG] session: {dict(session)}")
     job_id = request.args.get('job_id') or request.form.get('job_id') or session.get('job_id')
-    print(f"[approve_schedule] Received job_id: {job_id}")
+    print(f"[DEBUG] Received job_id: {job_id}")
     if not job_id:
         error_message = "No job_id found. Cannot proceed to payment."
-        print(f"[approve_schedule] ERROR: {error_message}")
+        print(f"[DEBUG] ERROR: {error_message}")
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
     # Store job_id in session for later retrieval
     session['job_id'] = job_id
@@ -148,9 +130,7 @@ from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
 from workschedule.services.stripe_service import create_checkout_session
 
-# Create a Blueprint for schedule-related routes
-schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
-                        template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
+ # ...existing code...
 
 def entity_to_dict(entity):
     """Recursively converts a Document AI entity to a dictionary."""
@@ -260,10 +240,7 @@ def upload_pdf():
                 **shift
             })
             
-        # The key for store number is changed here to 'store' instead of 'store_number'
-        for entry in final_output:
-            if 'store_number' in entry:
-                entry['store'] = entry.pop('store_number')
+    # Keep the key as 'store_number' for consistency with template
 
         # Prepare data for the HTML template
         entities_as_dicts = [entity_to_dict(entity) for entity in entities]

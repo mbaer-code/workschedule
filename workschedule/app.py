@@ -74,12 +74,27 @@ def create_app():
         template_folder=os.path.join(base_dir, 'templates')
     )
 
+    # Configure SQLAlchemy database URI from environment variables
+    db_user = os.environ.get("DB_USER", "postgres")
+    db_password = os.environ.get("DB_PASSWORD", "")
+    db_host = os.environ.get("DB_HOST", "localhost")
+    db_name = os.environ.get("DB_NAME", "workschedule-db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{db_user}:{db_password}@{db_host}/{db_name}"
+
+    # Initialize SQLAlchemy with the app
+    db.init_app(app)
+
     # Register schedule blueprint after app is created
     from workschedule.routes.schedule import schedule_bp
     app.register_blueprint(schedule_bp)
 
     # --- NEW ROUTES FOR PDF UPLOAD ---
     # These routes are part of the main app, not a blueprint.
+
+    # Print all registered routes for debugging
+    print("\n[DEBUG] Registered routes:")
+    for rule in app.url_map.iter_rules():
+        print(rule)
 
     @app.route("/schedule/upload")
     def schedule_upload():
