@@ -211,7 +211,7 @@ def extract_shifts_from_docai_entities(entities):
 
     return shifts
 
-def create_ics_from_entries(entries, calendar_name="work-schedule"):
+def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str=None):
     """
     Given a list of shift entries, generate an ICS calendar file as a string.
     This function uses the iCalendar library for robust file creation.
@@ -239,52 +239,50 @@ def create_ics_from_entries(entries, calendar_name="work-schedule"):
             unique_by_date[date_key] = entry
 
     # Iterate through the unique entries and create a VEVENT for each one.
+
+    import pytz
+    tzinfo = None
+    if timezone_str:
+        try:
+            tzinfo = pytz.timezone(timezone_str)
+        except Exception:
+            tzinfo = None
+
     for entry in unique_by_date.values():
         event = Event()
         start_dt = combine_date_time(entry['date'], entry['start_time'])
         end_dt = combine_date_time(entry['date'], entry['end_time'])
-        
+        # Apply timezone if available
+        if tzinfo:
+            start_dt = tzinfo.localize(start_dt)
+            end_dt = tzinfo.localize(end_dt)
+
         # If the end time is before the start time, it likely spans midnight.
         if end_dt < start_dt:
             end_dt += timedelta(days=1)
 
-        # Summary: Set the summary to a fixed value.
         event.add('summary', 'THD')
-
-        # Add start and end times to the event.
         event.add('dtstart', start_dt)
         event.add('dtend', end_dt)
-        
-        # Add DTSTAMP and LAST-MODIFIED for robust updates.
         now_utc = datetime.now(timezone.utc)
         event.add('dtstamp', now_utc)
         event.add('last-modified', now_utc)
 
-        # Description: Formatted for easy reading on a watch.
         description_parts = []
-        # Add a formatted time range.
         if entry.get('start_time') and entry.get('end_time'):
             description_parts.append(f"{entry['start_time']} - {entry['end_time']}")
-        # Add day and date as the next line.
         description_parts.append(entry['date'].strftime('%A, %b %d, %Y'))
-        # Add the department.
         if entry.get('department'):
             description_parts.append(entry['department'])
-        # Add the store number.
         if entry.get('role'):
             description_parts.append(entry['role'])
-        # Add the shift total if it exists.
         if entry.get('shift_total'):
             description_parts.append(f"Shift Total: {entry['shift_total']}")
 
         event.add('description', '\n'.join(description_parts))
-
-        # Generate a unique UID for each event based on its contents.
-        # This is the corrected logic: a repeatable hash based on the event's data.
         uid_source = f"{start_dt.isoformat()}-{end_dt.isoformat()}-{entry.get('department')}-{entry.get('role')}"
         uid_hash = hashlib.sha1(uid_source.encode('utf-8')).hexdigest()
         event.add('uid', uid_hash)
-
         cal.add_component(event)
 
     return cal.to_ical().decode('utf-8')

@@ -41,6 +41,7 @@
 
         <div class="mt-6 text-center flex flex-col gap-4">
             <form action="/schedule/approve_schedule" method="post">
+                <input type="hidden" name="job_id" value="{{ job_id }}" />
                 <button type="submit" class="bg-sky-600 text-white px-6 py-2 rounded hover:bg-sky-700 font-semibold">Approve &amp; Continue</button>
             </form>
             <form action="/schedule/export_calendar" method="post" class="flex flex-col items-center gap-2">
@@ -50,7 +51,7 @@
                 <input type="email" id="email" name="email" placeholder="your@email.com" class="border rounded px-2 py-1 w-64 text-center" required />
                 <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-semibold mt-2">Export to Calendar</button>
             </form>
-            <a href="/schedule/upload_schedule_new" class="text-sky-600 hover:underline">Upload another PDF</a>
+            <a href="/schedule/upload" class="text-sky-600 hover:underline">Upload another PDF</a>
         </div>
     </div>
 </body>

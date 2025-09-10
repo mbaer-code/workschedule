@@ -13,8 +13,6 @@ from workschedule.services.stripe_service import create_checkout_session
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
 
-# ...existing code...
-
 # Export to Calendar route
 @schedule_bp.route('/export_calendar', methods=['POST'])
 def export_calendar():
@@ -79,46 +77,28 @@ def stripe_webhook():
 
     return '', 200
 
-# ...existing code...
-
-@schedule_bp.route('/stripe_webhook', methods=['POST'])
-def stripe_webhook():
-    payload = request.data
-    sig_header = request.headers.get('Stripe-Signature')
-    webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
-    event = None
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, webhook_secret
-        )
-    except ValueError as e:
-        # Invalid payload
-        print(f"Stripe webhook error: {e}")
-        return abort(400)
-    except stripe.error.SignatureVerificationError as e:
-        # Invalid signature
-        print(f"Stripe webhook signature error: {e}")
-        return abort(400)
-
-    # Handle the checkout.session.completed event
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        customer_email = session.get('customer_email')
-        # TODO: Generate ICS file and send Mailgun email to customer_email
-        print(f"Payment succeeded for {customer_email}. Trigger ICS and email.")
-
-    return '', 200
-import os
-import datetime
-import json
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify
-from werkzeug.utils import secure_filename
-from src.services.documentai_processor import process_pdf_documentai_from_bytes
-from workschedule.services.stripe_service import create_checkout_session
-
-# Create a Blueprint for schedule-related routes
-schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
-                        template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
+# --- DEBUGGING ROUTE: Direct registration for easier debugging ---
+# NOTE: Remove this and return to blueprint once code is running
+@schedule_bp.route('/approve_schedule', methods=['POST'])
+def debug_approve_schedule():
+    import os
+    print("STRIPE_SECRET_KEY:", os.getenv("STRIPE_SECRET_KEY"))
+    print("STRIPE_PRICE_ID:", os.getenv("STRIPE_PRICE_ID"))
+    print("Direct approve_schedule route hit")
+    from flask import session, redirect, render_template
+    from workschedule.services.stripe_service import create_checkout_session
+    parsed_schedule = session.get('parsed_schedule')
+    if not parsed_schedule:
+        # Try to recover from previous session or set a default message
+        parsed_schedule = []
+    price_id = os.getenv("STRIPE_PRICE_ID")
+    customer_email = "test.user@example.com"
+    stripe_session = create_checkout_session(price_id, customer_email)
+    if not stripe_session or not hasattr(stripe_session, 'url'):
+        error_message = "Stripe session could not be created. Please try again later."
+        return render_template("review_schedule.html", parsed_schedule=parsed_schedule, raw_json=error_message)
+    return redirect(stripe_session.url)
+# --- END DEBUGGING ROUTE ---
 
 @schedule_bp.route('/approve_schedule', methods=['POST'])
 def approve_schedule():
@@ -130,12 +110,33 @@ def approve_schedule():
     # For now, redirect to Stripe payment page
     # Retrieve parsed schedule from session
     print("approve_schedule route registered")
-    parsed_schedule = session.get('parsed_schedule')
-    # TODO: Use parsed_schedule to generate ICS file after payment
-    stripe_session = create_checkout_session(amount=499, currency='usd', description='Schedule ICS File')
+    job_id = request.args.get('job_id') or request.form.get('job_id') or session.get('job_id')
+    print(f"[approve_schedule] Received job_id: {job_id}")
+    if not job_id:
+        error_message = "No job_id found. Cannot proceed to payment."
+        print(f"[approve_schedule] ERROR: {error_message}")
+        return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
+    # Store job_id in session for later retrieval
+    session['job_id'] = job_id
+    print(f"[approve_schedule] Stored job_id in session: {session.get('job_id')}")
+    success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
+    print(f"[approve_schedule] Stripe success_url: {success_url}")
+    cancel_url = "http://127.0.0.1:8080/schedule/payment_cancel"
+    price_id = os.getenv("STRIPE_PRICE_ID")
+    customer_email = session.get('user_email', "test.user@example.com")
+    stripe_session = create_checkout_session(
+        price_id,
+        customer_email,
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={'job_id': job_id}
+    )
+    print(f"[approve_schedule] Stripe session metadata: {stripe_session.metadata if hasattr(stripe_session, 'metadata') else 'No metadata'}")
     if not stripe_session or not hasattr(stripe_session, 'url'):
         error_message = "Stripe session could not be created. Please try again later."
-        return render_template("review_schedule.html", parsed_schedule=parsed_schedule or [], raw_json=error_message)
+        print(f"[approve_schedule] ERROR: {error_message}")
+        return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
+    print(f"[approve_schedule] Redirecting to Stripe checkout URL: {stripe_session.url}")
     return redirect(stripe_session.url)
 # schedule.py
 
@@ -165,8 +166,9 @@ def entity_to_dict(entity):
             entity_dict['properties'].append(entity_to_dict(prop))
     return entity_dict
 
-@schedule_bp.route("/upload_schedule_new", methods=["GET"])
-def upload_schedule_new():
+
+@schedule_bp.route("/upload", methods=["GET"])
+def upload_schedule():
     """Renders the upload schedule page."""
     return render_template("upload_schedule_new.html")
 
@@ -176,26 +178,38 @@ def upload_pdf():
     Handles the PDF upload, processes it, and displays the schedule on the webpage.
     """
     if 'pdfFile' not in request.files:
-        return redirect(url_for('schedule_bp.upload_schedule_new'))
+        return redirect(url_for('schedule_bp.upload_schedule'))
 
     pdf_file = request.files['pdfFile']
     email = request.form.get('email')
     timezone = request.form.get('timezone')
 
-    if not all([pdf_file, email, timezone]):
-        return redirect(url_for('schedule_bp.upload_schedule_new'))
+
+    if not email:
+        error_message = "Email address is required."
+        return render_template("upload_schedule_new.html", email_error=error_message)
+    if not timezone:
+        error_message = "Time zone is required."
+        return render_template("upload_schedule_new.html", timezone_error=error_message)
+    if not pdf_file:
+        error_message = "PDF file is required."
+        return render_template("upload_schedule_new.html", pdf_error=error_message)
+
+    # Store email and timezone in session for later use in payment flow and ICS generation
+    session['user_email'] = email
+    session['timezone'] = timezone
 
     if pdf_file.filename == '':
-        return redirect(url_for('schedule_bp.upload_schedule_new'))
+        return redirect(url_for('schedule_bp.upload_schedule'))
 
     if not pdf_file.filename.lower().endswith('.pdf'):
-        return redirect(url_for('schedule_bp.upload_schedule_new'))
+        return redirect(url_for('schedule_bp.upload_schedule'))
     
     try:
         pdf_contents = pdf_file.read()
     except Exception as e:
         print(f"Error reading file contents: {e}")
-        return redirect(url_for('schedule_bp.upload_schedule_new'))
+        return redirect(url_for('schedule_bp.upload_schedule'))
     
     try:
         extracted_text, entities = process_pdf_documentai_from_bytes(pdf_contents)
@@ -255,17 +269,36 @@ def upload_pdf():
         entities_as_dicts = [entity_to_dict(entity) for entity in entities]
         formatted_json = json.dumps(entities_as_dicts, indent=4)
 
-        # Return the parsed data to the HTML template for display
+
+        # Persist parsed schedule to database
+        import uuid
+        from workschedule.models import Schedule
+        from workschedule.app import db
+        job_id = str(uuid.uuid4())
+        # Save as JSON string
+        schedule_json = json.dumps(final_output)
+        schedule_entry = Schedule(
+            user_email=email,
+            job_id=job_id,
+            schedule_data=schedule_json
+        )
+        db.session.add(schedule_entry)
+        db.session.commit()
+
+        # Pass job_id to template for later use
         return render_template(
             'review_schedule.html',
             parsed_schedule=final_output,
-            formatted_json=formatted_json
+            formatted_json=formatted_json,
+            job_id=job_id
         )
 
     except Exception as e:
         print(f"An error occurred during parsing: {e}")
         error_message = f"An error occurred: {e}"
-        return render_template("review_schedule.html", raw_json=error_message)
+        # Try to pass job_id if it exists in local or session
+        job_id = locals().get('job_id') or session.get('job_id')
+        return render_template("review_schedule.html", raw_json=error_message, job_id=job_id)
 
 @schedule_bp.route('/download/<job_id>', methods=['GET'])
 def download_file(job_id):
@@ -286,8 +319,81 @@ def create_session():
 
 # Stripe payment success and cancel endpoints
 @schedule_bp.route('/payment_success', methods=['GET'])
+
+@schedule_bp.route('/payment_success', methods=['GET'])
 def payment_success():
-    return render_template('payment_success.html')
+    # 1. Verify payment (optional, recommended)
+    session_id = request.args.get('session_id')
+    payment_verified = False
+    if session_id:
+        import stripe
+        stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+        try:
+            checkout_session = stripe.checkout.Session.retrieve(session_id)
+            if checkout_session.payment_status == 'paid':
+                payment_verified = True
+        except Exception as e:
+            return render_template('payment_success.html', message=f"Error verifying payment: {e}")
+
+    if not payment_verified and session_id:
+        return render_template('payment_success.html', message="Payment not verified.")
+
+    # 2. Retrieve job_id from session or Stripe metadata
+    job_id = request.args.get('job_id') or session.get('job_id')
+    print(f"[payment_success] job_id from request.args: {request.args.get('job_id')}")
+    print(f"[payment_success] job_id from session: {job_id}")
+    if not job_id and session_id:
+        try:
+            job_id = checkout_session.metadata.get('job_id')
+            print(f"[payment_success] job_id from Stripe metadata: {job_id}")
+        except Exception as e:
+            print(f"[payment_success] ERROR retrieving job_id from Stripe metadata: {e}")
+            job_id = None
+    if not job_id:
+        print(f"[payment_success] ERROR: No job_id found. Cannot retrieve schedule.")
+        return render_template('payment_success.html', message="No job_id found. Cannot retrieve schedule.")
+
+    # 3. Fetch schedule from database
+    from workschedule.models import Schedule
+    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
+    if not schedule_entry:
+        return render_template('payment_success.html', message="No schedule found for this job_id.")
+    import json
+    parsed_schedule = json.loads(schedule_entry.schedule_data)
+
+    # 4. Generate ICS file
+    from workschedule.services.ics_generator import extract_shifts_from_docai_entities, create_ics_from_entries
+    shift_entries = extract_shifts_from_docai_entities(parsed_schedule)
+    calendar_name = "myschedule.cloud"
+    ics_content = create_ics_from_entries(shift_entries, calendar_name=calendar_name)
+
+    # 5. Send email
+    from workschedule.services.mailgun_service import send_simple_message
+    email = session.get('user_email')
+    if not email and session_id:
+        try:
+            email = checkout_session.customer_email
+        except Exception:
+            email = None
+    if not email:
+        return render_template('payment_success.html', message="No email found for user.")
+    subject = f"Your {calendar_name} Schedule ICS File"
+    text_content = "Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook."
+    send_success = send_simple_message(
+        to_email=email,
+        subject=subject,
+        text_content=text_content,
+        html_content=None,
+        attachment_bytes=ics_content.encode('utf-8'),
+        attachment_filename=f"{calendar_name}.ics"
+    )
+
+    # 6. Render success page
+    if send_success:
+        message = f"ICS file sent to {email}. Check your inbox!"
+    else:
+        message = f"Failed to send ICS file to {email}. Please try again."
+    return render_template('payment_success.html', message=message)
 
 @schedule_bp.route('/payment_cancel', methods=['GET'])
 def payment_cancel():
