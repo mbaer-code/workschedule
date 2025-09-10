@@ -19,33 +19,60 @@ def export_calendar():
     from workschedule.services.ics_generator import extract_shifts_from_docai_entities, create_ics_from_entries
     from workschedule.services.mailgun_service import send_simple_message
     from flask import make_response, request
-    parsed_schedule = session.get('parsed_schedule')
+    from workschedule.models import Schedule
+    job_id_form = request.form.get('job_id')
+    job_id_session = session.get('job_id')
+    job_id = job_id_form or job_id_session
+    print(f"[DEBUG] export_calendar: job_id from form={job_id_form}, job_id from session={job_id_session}, using job_id={job_id}")
+    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
+    print(f"[DEBUG] export_calendar: schedule_entry from DB={schedule_entry}")
+    print(f"[DEBUG] export_calendar: raw schedule_data from DB={getattr(schedule_entry, 'schedule_data', None)}")
+    if not schedule_entry:
+        print(f"[DEBUG] export_calendar: No schedule entry found for job_id={job_id}")
+        return render_template('review_schedule.html', parsed_schedule=[], raw_json='No schedule data found for this job.')
+    import json
+    parsed_schedule = json.loads(schedule_entry.schedule_data)
+    print(f"[DEBUG] export_calendar: loaded schedule_data={parsed_schedule}")
     if not parsed_schedule:
+        print(f"[DEBUG] export_calendar: No schedule data to export for job_id={job_id}")
         return render_template('review_schedule.html', parsed_schedule=[], raw_json='No schedule data to export.')
 
-    shift_entries = extract_shifts_from_docai_entities(parsed_schedule)
+    print(f"[DEBUG] export_calendar: parsed_schedule type={type(parsed_schedule)} length={len(parsed_schedule) if hasattr(parsed_schedule, '__len__') else 'N/A'}")
+    print(f"[DEBUG] export_calendar: passing parsed_schedule directly to ICS generator")
     calendar_name = request.form.get('calendar_name', 'myschedule.cloud')
     timezone = request.form.get('timezone', 'America/Los_Angeles')
     email = request.form.get('email')
-    ics_content = create_ics_from_entries(shift_entries, calendar_name=calendar_name)
+    ics_content = create_ics_from_entries(parsed_schedule, calendar_name=calendar_name)
     # If your ICS generator supports time zone, pass it here (update function signature if needed)
 
-    # Send ICS file via Mailgun
+    # Store ICS content in DB or persistent storage here (not shown)
+    # Generate download link for the ICS file
+    job_id = session.get('job_id', 'unknown')
+    # Use http for localhost, https for cloud
+    if request.host.startswith("127.0.0.1") or request.host.startswith("localhost"):
+        download_url = f"http://{request.host}/schedule/download/{job_id}"
+    else:
+        download_url = f"https://{request.host}/schedule/download/{job_id}"
     subject = f"Your {calendar_name} Schedule ICS File"
-    text_content = "Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook."
+    text_content = (
+        "Your work schedule is ready! You can import it into Google Calendar, Apple Calendar, or Outlook.\n\n"
+        f"Download your calendar file here: {download_url}"
+    )
+    html_content = (
+        f"<p>Your work schedule is ready! You can import it into Google Calendar, Apple Calendar, or Outlook.</p>"
+        f"<p><a href='{download_url}'>Download your calendar file</a></p>"
+    )
     success = send_simple_message(
         to_email=email,
         subject=subject,
         text_content=text_content,
-        html_content=None,
-        attachment_bytes=ics_content.encode('utf-8'),
-        attachment_filename=f"{calendar_name}.ics"
+        html_content=html_content
     )
 
     if success:
-        success_message = f"ICS file sent to {email}. Check your inbox!"
+        success_message = f"ICS download link sent to {email}. Check your inbox!"
     else:
-        success_message = f"Failed to send ICS file to {email}. Please try again."
+        success_message = f"Failed to send ICS download link to {email}. Please try again."
 
     return render_template('review_schedule.html', parsed_schedule=parsed_schedule, raw_json=success_message)
 
@@ -91,21 +118,42 @@ def approve_schedule():
     print(f"[DEBUG] request.method: {request.method}")
     print(f"[DEBUG] request.form: {request.form}")
     print(f"[DEBUG] request.args: {request.args}")
-    print(f"[DEBUG] session: {dict(session)}")
-    job_id = request.args.get('job_id') or request.form.get('job_id') or session.get('job_id')
+    job_id = request.args.get('job_id') or request.form.get('job_id')
     print(f"[DEBUG] Received job_id: {job_id}")
     if not job_id:
         error_message = "No job_id found. Cannot proceed to payment."
         print(f"[DEBUG] ERROR: {error_message}")
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
-    # Store job_id in session for later retrieval
-    session['job_id'] = job_id
-    print(f"[approve_schedule] Stored job_id in session: {session.get('job_id')}")
+
+    # Fetch schedule from DB
+    from workschedule.models import Schedule
+    import json
+    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
+    if not schedule_entry:
+        error_message = "No schedule found for this job_id. Cannot proceed to payment."
+        print(f"[DEBUG] ERROR: {error_message}")
+        return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
+    parsed_schedule = json.loads(schedule_entry.schedule_data)
+    print(f"[DEBUG] Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
+
+    # If parsed_schedule is empty, try to get it from the form and persist it
+    if not parsed_schedule and request.form.get('parsed_schedule'):
+        try:
+            new_schedule = json.loads(request.form.get('parsed_schedule'))
+            print(f"[DEBUG] approve_schedule: Persisting new schedule for job_id={job_id}: {new_schedule}")
+            schedule_entry.schedule_data = json.dumps(new_schedule)
+            from workschedule.app import db
+            db.session.commit()
+            parsed_schedule = new_schedule
+        except Exception as e:
+            print(f"[DEBUG] approve_schedule: Failed to persist new schedule: {e}")
+
+    # Stripe payment logic
     success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
     print(f"[approve_schedule] Stripe success_url: {success_url}")
     cancel_url = "http://127.0.0.1:8080/schedule/payment_cancel"
     price_id = os.getenv("STRIPE_PRICE_ID")
-    customer_email = session.get('user_email', "test.user@example.com")
+    customer_email = schedule_entry.user_email or "test.user@example.com"
     stripe_session = create_checkout_session(
         price_id,
         customer_email,
@@ -262,6 +310,9 @@ def upload_pdf():
         db.session.add(schedule_entry)
         db.session.commit()
 
+        # Store job_id in session for use in approval and export
+        session['job_id'] = job_id
+
         # Pass job_id to template for later use
         return render_template(
             'review_schedule.html',
@@ -279,8 +330,20 @@ def upload_pdf():
 
 @schedule_bp.route('/download/<job_id>', methods=['GET'])
 def download_file(job_id):
-    """Placeholder for file download."""
-    return render_template('download_page.html', job_id=job_id)
+    # Serve the ICS file for the given job_id
+    from workschedule.models import Schedule
+    from workschedule.services.ics_generator import create_ics_from_entries
+    import json
+    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
+    if not schedule_entry:
+        return "No schedule found for this job_id.", 404
+    parsed_schedule = json.loads(schedule_entry.schedule_data)
+    calendar_name = "myschedule.cloud"
+    ics_content = create_ics_from_entries(parsed_schedule, calendar_name=calendar_name)
+    from flask import Response
+    response = Response(ics_content, mimetype="text/calendar")
+    response.headers["Content-Disposition"] = f"attachment; filename={calendar_name}.ics"
+    return response
 
 @schedule_bp.route('/create-checkout-session', methods=['POST'])
 def create_session():
@@ -354,13 +417,25 @@ def payment_success():
             email = None
     if not email:
         return render_template('payment_success.html', message="No email found for user.")
+    # Use http for localhost, https for cloud
+    if request.host.startswith("127.0.0.1") or request.host.startswith("localhost"):
+        download_url = f"http://{request.host}/schedule/download/{job_id}"
+    else:
+        download_url = f"https://{request.host}/schedule/download/{job_id}"
     subject = f"Your {calendar_name} Schedule ICS File"
-    text_content = "Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook."
+    text_content = (
+        "Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook.\n\n"
+        f"Download your calendar file here: {download_url}"
+    )
+    html_content = (
+        f"<p>Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook.</p>"
+        f"<p><a href='{download_url}'>Download your calendar file</a></p>"
+    )
     send_success = send_simple_message(
         to_email=email,
         subject=subject,
         text_content=text_content,
-        html_content=None,
+        html_content=html_content,
         attachment_bytes=ics_content.encode('utf-8'),
         attachment_filename=f"{calendar_name}.ics"
     )
