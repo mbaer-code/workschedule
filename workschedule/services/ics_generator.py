@@ -223,22 +223,13 @@ def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str
     Returns:
         str: The content of the iCalendar file.
     """
+    print(f"[DEBUG] create_ics_from_entries: received entries={entries}")
+    print(f"[DEBUG] create_ics_from_entries: entries count={len(entries)}")
     cal = Calendar()
     cal.add('prodid', '-//Workforce Schedule//mxm.dk//')
     cal.add('version', '2.0')
-    # Use METHOD:PUBLISH to tell the calendar client this is a full calendar publication.
     cal.add('method', 'PUBLISH')
     cal.add('X-WR-CALNAME', calendar_name)
-
-    # Use a dictionary to handle deduplication and only keep one shift per day.
-    unique_by_date = {}
-    for entry in entries:
-        date_key = entry['date'].date() if isinstance(entry['date'], datetime) else entry['date']
-        # This logic ensures we only add one event per day from the input.
-        if date_key not in unique_by_date:
-            unique_by_date[date_key] = entry
-
-    # Iterate through the unique entries and create a VEVENT for each one.
 
     import pytz
     tzinfo = None
@@ -248,39 +239,40 @@ def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str
         except Exception:
             tzinfo = None
 
-    for entry in unique_by_date.values():
-        event = Event()
-        start_dt = combine_date_time(entry['date'], entry['start_time'])
-        end_dt = combine_date_time(entry['date'], entry['end_time'])
-        # Apply timezone if available
+    for entry in entries:
+        # Parse date from 'shift_date' (e.g., 'Mon, Sep 08') and add current year
+        try:
+            date_str = entry.get('shift_date', '')
+            date_obj = datetime.strptime(f"{date_str} {datetime.now().year}", "%a, %b %d %Y")
+        except Exception as e:
+            print(f"[DEBUG] Failed to parse shift_date '{entry.get('shift_date')}' with error: {e}")
+            continue
+        start_time = entry.get('shift_start', '')
+        end_time = entry.get('shift_end', '')
+        if not start_time or not end_time:
+            print(f"[DEBUG] Missing start or end time for entry: {entry}")
+            continue
+        start_dt = combine_date_time(date_obj, start_time)
+        end_dt = combine_date_time(date_obj, end_time)
         if tzinfo:
             start_dt = tzinfo.localize(start_dt)
             end_dt = tzinfo.localize(end_dt)
-
-        # If the end time is before the start time, it likely spans midnight.
         if end_dt < start_dt:
             end_dt += timedelta(days=1)
-
-        event.add('summary', 'THD')
+        event = Event()
+        event.add('summary', entry.get('department', 'Work Shift'))
         event.add('dtstart', start_dt)
         event.add('dtend', end_dt)
         now_utc = datetime.now(timezone.utc)
         event.add('dtstamp', now_utc)
         event.add('last-modified', now_utc)
-
-        description_parts = []
-        if entry.get('start_time') and entry.get('end_time'):
-            description_parts.append(f"{entry['start_time']} - {entry['end_time']}")
-        description_parts.append(entry['date'].strftime('%A, %b %d, %Y'))
+        description_parts = [f"{start_time} - {end_time}", date_obj.strftime('%A, %b %d, %Y')]
         if entry.get('department'):
             description_parts.append(entry['department'])
-        if entry.get('role'):
-            description_parts.append(entry['role'])
-        if entry.get('shift_total'):
-            description_parts.append(f"Shift Total: {entry['shift_total']}")
-
+        if entry.get('store_number'):
+            description_parts.append(f"Store: {entry['store_number']}")
         event.add('description', '\n'.join(description_parts))
-        uid_source = f"{start_dt.isoformat()}-{end_dt.isoformat()}-{entry.get('department')}-{entry.get('role')}"
+        uid_source = f"{date_obj.isoformat()}-{start_time}-{end_time}-{entry.get('department')}-{entry.get('store_number')}"
         uid_hash = hashlib.sha1(uid_source.encode('utf-8')).hexdigest()
         event.add('uid', uid_hash)
         cal.add_component(event)
