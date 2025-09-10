@@ -12,4 +12,5 @@ icalendar
 requests 
 stripe
 pytest
+pytz
 

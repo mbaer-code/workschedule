@@ -67,68 +67,22 @@ except Exception as e:
     gcs_bucket = None
 
 def create_app():
-    """
-    Creates and configures the Flask application.
-    """
-    app = Flask(__name__, static_folder='workschedule/static', template_folder='workschedule/templates')
-    app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fallback_key")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    app = Flask(
+        __name__,
+        static_folder=os.path.join(base_dir, 'static'),
+        template_folder=os.path.join(base_dir, 'templates')
+    )
 
-    logging.debug(f"App object created. {app.secret_key}")
-    
-    # --- Database Configuration ---
-    db_user = os.environ.get("DB_USER")
-    db_pass = os.environ.get("DB_PASS")
-    db_name = os.environ.get("DB_NAME")
-    
-    db_uri = None
-
-    if os.environ.get("K_SERVICE"):
-        # This branch is for running on Cloud Run
-        instance_connection_name = os.environ.get("INSTANCE_CONNECTION_NAME")
-        if not all([db_user, db_pass, db_name, instance_connection_name]):
-            logging.error("Missing one or more database environment variables for Cloud Run.")
-            sys.exit(1)
-        db_uri = f"postgresql://{db_user}:{db_pass}@/{db_name}?host=/cloudsql/{instance_connection_name}"
-    else:
-        # This branch is for local development
-        if not all([db_user, db_pass, db_name]):
-            logging.error("Missing DB_USER, DB_PASS, or DB_NAME environment variables.")
-            sys.exit(1)
-        db_uri = f"postgresql://{db_user}:{db_pass}@127.0.0.1:5432/{db_name}"
-
-    app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    
-    logging.debug(f"Attempting to connect to database using URI: {db_uri}")
-
-    # Initialize extensions with the app using a try-except block for better error reporting
-    try:
-        with app.app_context():
-            db.init_app(app)
-            migrate.init_app(app, db)
-        logging.debug("Database connection successful!")
-    except SQLAlchemyError as e:
-        logging.error(f"Failed to connect to the database: {e}")
-        sys.exit(1)
-    
-    # --- Register Blueprints ---
-    logging.debug("Attempting to import blueprints...")
+    # Register schedule blueprint after app is created
     from workschedule.routes.schedule import schedule_bp
-    from workschedule.routes.auth import auth_bp
-    logging.debug("Blueprints imported successfully.")
-    
     app.register_blueprint(schedule_bp)
-    app.register_blueprint(auth_bp)
-
-    # Print all registered routes for debugging
-    for rule in app.url_map.iter_rules():
-        print(rule)
 
     # --- NEW ROUTES FOR PDF UPLOAD ---
     # These routes are part of the main app, not a blueprint.
-    
-    @app.route("/upload_schedule")
-    def upload_schedule():
+
+    @app.route("/schedule/upload")
+    def schedule_upload():
         return render_template("upload_schedule_new.html")
 
     @app.route("/upload", methods=["POST"])
@@ -187,28 +141,6 @@ def create_app():
         # Placeholder for your dashboard logic
         return "Dashboard page"
     
-    # --- DEBUGGING ROUTE: Direct registration for easier debugging ---
-    # NOTE: Remove this and return to blueprint once code is running
-    @app.route('/schedule/approve_schedule', methods=['POST'])
-    def debug_approve_schedule():
-        import os
-        print("STRIPE_SECRET_KEY:", os.getenv("STRIPE_SECRET_KEY"))
-        print("STRIPE_PRICE_ID:", os.getenv("STRIPE_PRICE_ID"))
-        print("Direct approve_schedule route hit")
-        from flask import session, redirect, render_template
-        from workschedule.services.stripe_service import create_checkout_session
-        parsed_schedule = session.get('parsed_schedule')
-        if not parsed_schedule:
-            # Try to recover from previous session or set a default message
-            parsed_schedule = []
-        price_id = os.getenv("STRIPE_PRICE_ID")
-        customer_email = "test.user@example.com"
-        stripe_session = create_checkout_session(price_id, customer_email)
-        if not stripe_session or not hasattr(stripe_session, 'url'):
-            error_message = "Stripe session could not be created. Please try again later."
-            return render_template("review_schedule.html", parsed_schedule=parsed_schedule, raw_json=error_message)
-        return redirect(stripe_session.url)
-    # --- END DEBUGGING ROUTE ---
 
     return app
 

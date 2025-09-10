@@ -57,9 +57,12 @@
         <!-- Form for uploading PDF schedule -->
         <form action="{{ url_for('schedule_bp.upload_pdf') }}" method="post" enctype="multipart/form-data" class="space-y-4">
             <div>
-                <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
-                <input type="email" id="email" name="email" required 
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 p-2 border">
+          <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+          <input type="email" id="email" name="email" required 
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 p-2 border">
+          {% if email_error %}
+          <div class="text-red-600 text-sm mt-1">{{ email_error }}</div>
+          {% endif %}
             </div>
 
             <div>
@@ -72,11 +75,17 @@
                     <option value="EST">EST (Eastern Standard Time)</option>
                     <option value="GMT">GMT (Greenwich Mean Time)</option>
                 </select>
+                {% if timezone_error %}
+                <div class="text-red-600 text-sm mt-1">{{ timezone_error }}</div>
+                {% endif %}
             </div>
 
             <div class="custom-file-input">
                 <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf" required>
                 <span class="custom-file-input-text">Click or drag a PDF file here</span>
+                {% if pdf_error %}
+                <div class="text-red-600 text-sm mt-1">{{ pdf_error }}</div>
+                {% endif %}
             </div>
 
             <button type="submit" class="w-full bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-sky-700 transition-colors duration-300">
