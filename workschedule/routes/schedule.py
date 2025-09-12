@@ -223,6 +223,17 @@ def upload_pdf():
         error_message = "PDF file is required."
         return render_template("upload_schedule_new.html", pdf_error=error_message)
 
+
+    if 'pdfFile' not in request.files:
+        print("[DEBUG] upload_pdf: No pdfFile in request.files")
+        return redirect(url_for('schedule_bp.upload_schedule'))
+
+    pdf_file = request.files['pdfFile']
+    print(f"[DEBUG] upload_pdf: pdf_file.filename={pdf_file.filename}")
+    email = request.form.get('email')
+    timezone = request.form.get('timezone')
+    print(f"[DEBUG] upload_pdf: email={email}, timezone={timezone}")
+
     # Store email and timezone in session for later use in payment flow and ICS generation
     session['user_email'] = email
     session['timezone'] = timezone
@@ -246,12 +257,16 @@ def upload_pdf():
             error_message = "No schedule data found or document could not be processed."
             return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
 
+        print(f"[DEBUG] upload_pdf: Read {len(pdf_contents)} bytes from PDF file")
+
         # 1. Extract only valid work shifts
         parsed_shifts = []
         for entity in entities:
             if entity.type_ == "Work-shift":
                 properties = {prop.type_: prop.mention_text.strip() for prop in entity.properties}
                 
+                print(f"[DEBUG] upload_pdf: extracted_text length={len(extracted_text) if extracted_text else 0}")
+                print(f"[DEBUG] upload_pdf: entities count={len(entities) if entities else 0}")
                 # Check for core properties to ensure it's a complete shift
                 if all(field in properties for field in ['Shift-date', 'Shift-end', 'Start-start', 'Department', 'Store-number']):
                     
@@ -288,8 +303,9 @@ def upload_pdf():
                 **shift
             })
             
-    # Keep the key as 'store_number' for consistency with template
+        # Keep the key as 'store_number' for consistency with template
 
+        print(f"[DEBUG] upload_pdf: parsed_shifts count={len(parsed_shifts)}")
         # Prepare data for the HTML template
         entities_as_dicts = [entity_to_dict(entity) for entity in entities]
         formatted_json = json.dumps(entities_as_dicts, indent=4)
