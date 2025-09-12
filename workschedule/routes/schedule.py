@@ -128,13 +128,19 @@ def approve_schedule():
     # Fetch schedule from DB
     from workschedule.models import Schedule
     import json
-    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
-    if not schedule_entry:
-        error_message = "No schedule found for this job_id. Cannot proceed to payment."
-        print(f"[DEBUG] ERROR: {error_message}")
+    try:
+        print(f"[DEBUG] approve_schedule: Querying DB for job_id={job_id}")
+        schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
+        if not schedule_entry:
+            error_message = "No schedule found for this job_id. Cannot proceed to payment."
+            print(f"[ERROR] approve_schedule: {error_message}")
+            return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
+        parsed_schedule = json.loads(schedule_entry.schedule_data)
+        print(f"[DEBUG] approve_schedule: Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
+    except Exception as db_exc:
+        print(f"[ERROR] approve_schedule: DB query failed: {db_exc}")
+        error_message = f"Database error: {db_exc}"
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
-    parsed_schedule = json.loads(schedule_entry.schedule_data)
-    print(f"[DEBUG] Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
 
     # If parsed_schedule is empty, try to get it from the form and persist it
     if not parsed_schedule and request.form.get('parsed_schedule'):
@@ -318,13 +324,20 @@ def upload_pdf():
         job_id = str(uuid.uuid4())
         # Save as JSON string
         schedule_json = json.dumps(final_output)
-        schedule_entry = Schedule(
-            user_email=email,
-            job_id=job_id,
-            schedule_data=schedule_json
-        )
-        db.session.add(schedule_entry)
-        db.session.commit()
+        try:
+            print(f"[DEBUG] upload_pdf: Creating Schedule entry for job_id={job_id}, user_email={email}")
+            schedule_entry = Schedule(
+                user_email=email,
+                job_id=job_id,
+                schedule_data=schedule_json
+            )
+            db.session.add(schedule_entry)
+            db.session.commit()
+            print(f"[DEBUG] upload_pdf: Schedule entry committed to DB for job_id={job_id}")
+        except Exception as db_exc:
+            print(f"[ERROR] upload_pdf: Failed to commit Schedule entry to DB: {db_exc}")
+            error_message = f"Database error: {db_exc}"
+            return render_template("review_schedule.html", raw_json=error_message, job_id=job_id)
 
         # Store job_id in session for use in approval and export
         session['job_id'] = job_id
