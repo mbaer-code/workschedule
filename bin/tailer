@@ -1,0 +1,8 @@
+
+
+
+
+
+gcloud beta run services logs tail logs tail workschedule-api --project work-schedule-cloud
+
+#gcloud run services logs read workschedule-api --limit=10 --project work-schedule-cloud
