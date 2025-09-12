@@ -4,6 +4,7 @@ import datetime
 import json
 from flask import session
 import stripe
+import sys
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
@@ -133,12 +134,12 @@ def approve_schedule():
         schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
         if not schedule_entry:
             error_message = "No schedule found for this job_id. Cannot proceed to payment."
-            print(f"[ERROR] approve_schedule: {error_message}")
+            sys.stderr.write(f"[ERROR] approve_schedule: {error_message}\n")
             return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
         parsed_schedule = json.loads(schedule_entry.schedule_data)
         print(f"[DEBUG] approve_schedule: Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
     except Exception as db_exc:
-        print(f"[ERROR] approve_schedule: DB query failed: {db_exc}")
+        sys.stderr.write(f"[ERROR] approve_schedule: DB query failed: {db_exc}\n")
         error_message = f"Database error: {db_exc}"
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
 
@@ -335,7 +336,7 @@ def upload_pdf():
             db.session.commit()
             print(f"[DEBUG] upload_pdf: Schedule entry committed to DB for job_id={job_id}")
         except Exception as db_exc:
-            print(f"[ERROR] upload_pdf: Failed to commit Schedule entry to DB: {db_exc}")
+            sys.stderr.write(f"[ERROR] upload_pdf: Failed to commit Schedule entry to DB: {db_exc}\n")
             error_message = f"Database error: {db_exc}"
             return render_template("review_schedule.html", raw_json=error_message, job_id=job_id)
 
@@ -351,7 +352,7 @@ def upload_pdf():
         )
 
     except Exception as e:
-        print(f"An error occurred during parsing: {e}")
+        sys.stderr.write(f"[ERROR] upload_pdf: An error occurred during parsing: {e}\n")
         error_message = f"An error occurred: {e}"
         # Try to pass job_id if it exists in local or session
         job_id = locals().get('job_id') or session.get('job_id')

@@ -12,9 +12,12 @@ def process_pdf_documentai_from_bytes(file_contents: bytes):
     Returns:
         A tuple containing the extracted text and a list of entities, or (None, None) if an error occurs.
     """
+
     PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT_ID")
     LOCATION = os.environ.get("DOCUMENT_AI_LOCATION", "us")
     PROCESSOR_ID = os.environ.get("DOCUMENT_AI_PROCESSOR_ID")
+
+    print(f"[DEBUG] DocumentAI ENV: PROJECT_ID={PROJECT_ID}, LOCATION={LOCATION}, PROCESSOR_ID={PROCESSOR_ID}")
 
     if not PROJECT_ID or not PROCESSOR_ID:
         print("Error: PROJECT_ID or PROCESSOR_ID not configured.")
