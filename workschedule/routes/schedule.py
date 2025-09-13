@@ -209,6 +209,8 @@ def upload_schedule():
 
 @schedule_bp.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
+    import sys
+    sys.stderr.write(f"[DEBUG] upload_pdf: request.files={list(request.files.keys())}, request.form={dict(request.form)}, method={request.method}\n")
     """
     Handles the PDF upload, processes it, and displays the schedule on the webpage.
     """
