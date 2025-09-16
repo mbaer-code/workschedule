@@ -4,7 +4,6 @@ import datetime
 import json
 from flask import session
 import stripe
-import sys
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
@@ -134,12 +133,12 @@ def approve_schedule():
         schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
         if not schedule_entry:
             error_message = "No schedule found for this job_id. Cannot proceed to payment."
-            sys.stderr.write(f"[ERROR] approve_schedule: {error_message}\n")
+            print(f"[ERROR] approve_schedule: {error_message}")
             return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
         parsed_schedule = json.loads(schedule_entry.schedule_data)
         print(f"[DEBUG] approve_schedule: Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
     except Exception as db_exc:
-        sys.stderr.write(f"[ERROR] approve_schedule: DB query failed: {db_exc}\n")
+        print(f"[ERROR] approve_schedule: DB query failed: {db_exc}")
         error_message = f"Database error: {db_exc}"
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
 
@@ -156,10 +155,9 @@ def approve_schedule():
             print(f"[DEBUG] approve_schedule: Failed to persist new schedule: {e}")
 
     # Stripe payment logic
-    base_url = os.getenv("BASE_URL", "http://127.0.0.1:8080")
-    success_url = f"{base_url}/schedule/payment_success?job_id={job_id}" if job_id else f"{base_url}/schedule/payment_success"
+    success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
     print(f"[approve_schedule] Stripe success_url: {success_url}")
-    cancel_url = f"{base_url}/schedule/payment_cancel"
+    cancel_url = "http://127.0.0.1:8080/schedule/payment_cancel"
     price_id = os.getenv("STRIPE_PRICE_ID")
     customer_email = schedule_entry.user_email or "test.user@example.com"
     stripe_session = create_checkout_session(
@@ -210,8 +208,6 @@ def upload_schedule():
 
 @schedule_bp.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
-    import sys
-    sys.stderr.write(f"[DEBUG] upload_pdf: request.files={list(request.files.keys())}, request.form={dict(request.form)}, method={request.method}\n")
     """
     Handles the PDF upload, processes it, and displays the schedule on the webpage.
     """
@@ -326,8 +322,8 @@ def upload_pdf():
         from workschedule.models import Schedule
         from workschedule.app import db
         job_id = str(uuid.uuid4())
-        # Save raw parsed_shifts as JSON string for ICS compatibility
-        schedule_json = json.dumps(parsed_shifts, default=str)
+        # Save as JSON string
+        schedule_json = json.dumps(final_output)
         try:
             print(f"[DEBUG] upload_pdf: Creating Schedule entry for job_id={job_id}, user_email={email}")
             schedule_entry = Schedule(
@@ -339,7 +335,7 @@ def upload_pdf():
             db.session.commit()
             print(f"[DEBUG] upload_pdf: Schedule entry committed to DB for job_id={job_id}")
         except Exception as db_exc:
-            sys.stderr.write(f"[ERROR] upload_pdf: Failed to commit Schedule entry to DB: {db_exc}\n")
+            print(f"[ERROR] upload_pdf: Failed to commit Schedule entry to DB: {db_exc}")
             error_message = f"Database error: {db_exc}"
             return render_template("review_schedule.html", raw_json=error_message, job_id=job_id)
 
@@ -355,7 +351,7 @@ def upload_pdf():
         )
 
     except Exception as e:
-        sys.stderr.write(f"[ERROR] upload_pdf: An error occurred during parsing: {e}\n")
+        print(f"An error occurred during parsing: {e}")
         error_message = f"An error occurred: {e}"
         # Try to pass job_id if it exists in local or session
         job_id = locals().get('job_id') or session.get('job_id')
@@ -400,8 +396,6 @@ def payment_success():
     payment_verified = False
     if session_id:
         import stripe
-        import os
-        stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
         stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
         try:
             checkout_session = stripe.checkout.Session.retrieve(session_id)
@@ -450,9 +444,6 @@ def payment_success():
             email = checkout_session.customer_email
         except Exception:
             email = None
-    # Fallback: get email from Schedule DB entry
-    if not email and schedule_entry:
-        email = getattr(schedule_entry, 'user_email', None)
     if not email:
         return render_template('payment_success.html', message="No email found for user.")
     # Use http for localhost, https for cloud
