@@ -18,15 +18,17 @@ def send_simple_message(to_email, subject, text_content, html_content=None, atta
     Returns:
         bool: True if the email was sent successfully, False otherwise.
     """
+    import sys
     mailgun_api_key = os.getenv("MAILGUN_API_KEY")
     mailgun_domain = os.getenv("MAILGUN_DOMAIN")
 
+    sys.stderr.write(f"[Mailgun] Preparing to send email. to_email={to_email}, subject={subject}, mailgun_domain={mailgun_domain}\n")
     if not mailgun_api_key or not mailgun_domain:
-        print("Error: Mailgun API key or domain is not set in environment variables.")
+        sys.stderr.write("[Mailgun] Error: Mailgun API key or domain is not set in environment variables.\n")
         return False
 
     api_url = f"https://api.mailgun.net/v3/{mailgun_domain}/messages"
-    
+    sys.stderr.write(f"[Mailgun] API URL: {api_url}\n")
     data = {
         "from": f"Schedule to ICS <mailgun@{mailgun_domain}>",
         "to": to_email,
@@ -43,6 +45,9 @@ def send_simple_message(to_email, subject, text_content, html_content=None, atta
             ("attachment", (attachment_filename, attachment_bytes, "text/calendar"))
         ]
 
+    sys.stderr.write(f"[Mailgun] Data: {data}\n")
+    if files:
+        sys.stderr.write(f"[Mailgun] Attachment: {attachment_filename}, bytes={len(attachment_bytes)}\n")
     try:
         response = requests.post(
             api_url,
@@ -50,10 +55,15 @@ def send_simple_message(to_email, subject, text_content, html_content=None, atta
             data=data,
             files=files
         )
+        sys.stderr.write(f"[Mailgun] Response status: {response.status_code}\n")
+        sys.stderr.write(f"[Mailgun] Response text: {response.text}\n")
         response.raise_for_status()  # Raises an HTTPError for bad responses
-        print(f"Email sent successfully to {to_email}. Status code: {response.status_code}")
+        sys.stderr.write(f"[Mailgun] Email sent successfully to {to_email}.\n")
         return True
     except requests.exceptions.RequestException as e:
-        print(f"Failed to send email to {to_email}: {e}")
+        sys.stderr.write(f"[Mailgun] Failed to send email to {to_email}: {e}\n")
+        if 'response' in locals():
+            sys.stderr.write(f"[Mailgun] Error response status: {response.status_code}\n")
+            sys.stderr.write(f"[Mailgun] Error response text: {response.text}\n")
         return False
 

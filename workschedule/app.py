@@ -74,15 +74,14 @@ def create_app():
         template_folder=os.path.join(base_dir, 'templates')
     )
 
-    # Configure SQLAlchemy database URI from environment variables
-    db_user = os.environ.get("DB_USER", "postgres")
-    db_password = os.environ.get("DB_PASSWORD", "")
-    db_host = os.environ.get("DB_HOST", "localhost")
-    db_name = os.environ.get("DB_NAME", "workschedule-db")
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{db_user}:{db_password}@{db_host}/{db_name}"
+    # Use SQLALCHEMY_DATABASE_URI from Config class for correct Cloud Run/local DB connection
+    from workschedule.config import Config
+    app.config["SQLALCHEMY_DATABASE_URI"] = Config.SQLALCHEMY_DATABASE_URI
 
     # Initialize SQLAlchemy with the app
     db.init_app(app)
+    # Initialize Flask-Migrate with the app and db
+    migrate.init_app(app, db)
 
     # Register schedule blueprint after app is created
     from workschedule.routes.schedule import schedule_bp

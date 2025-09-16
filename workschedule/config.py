@@ -27,24 +27,25 @@ class Config:
     DB_USER = os.environ.get('DB_USER')
     DB_PASSWORD = os.environ.get('DB_PASSWORD')
     DB_NAME = os.environ.get('DB_NAME')
-
-    # SQLAlchemy Database URI (dynamically generated based on environment)
-    # Cloud Run detection: `K_SERVICE` environment variable is set by Cloud Run.
-    if CLOUD_SQL_CONNECTION_NAME and os.environ.get('K_SERVICE'):
-        # Running on Cloud Run: Use Unix socket connection via Cloud SQL Connector
-        # Format: postgresql+psycopg2://<user>:<password>@/<dbname>?host=/cloudsql/<INSTANCE_CONNECTION_NAME>
-        SQLALCHEMY_DATABASE_URI = (
-            f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@"
-            f"/{DB_NAME}?host=/cloudsql/{CLOUD_SQL_CONNECTION_NAME}"
-        )
-    else:
-        # Running locally (or anywhere not detected as Cloud Run): Use standard TCP connection
-        # DB_HOST and DB_PORT will come from .env for local development (e.g., localhost:5432 with proxy)
-        DB_HOST = os.environ.get('DB_HOST', 'localhost')
-        DB_PORT = os.environ.get('DB_PORT', '5432')
-        SQLALCHEMY_DATABASE_URI = (
-            f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-        )
+    # SQLAlchemy Database URI: prioritize environment variable if set
+    SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI')
+    if not SQLALCHEMY_DATABASE_URI:
+        # Cloud Run detection: `K_SERVICE` environment variable is set by Cloud Run.
+        if CLOUD_SQL_CONNECTION_NAME and os.environ.get('K_SERVICE'):
+            # Running on Cloud Run: Use Unix socket connection via Cloud SQL Connector
+            SQLALCHEMY_DATABASE_URI = (
+                f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@"
+                f"/{DB_NAME}?host=/cloudsql/{CLOUD_SQL_CONNECTION_NAME}"
+            )
+            print(f"[DEBUG] Using Cloud Run SQLALCHEMY_DATABASE_URI: {SQLALCHEMY_DATABASE_URI}")
+        else:
+            # Running locally (or anywhere not detected as Cloud Run): Use standard TCP connection
+            DB_HOST = os.environ.get('DB_HOST', 'localhost')
+            DB_PORT = os.environ.get('DB_PORT', '5432')
+            SQLALCHEMY_DATABASE_URI = (
+                f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+            )
+            print(f"[DEBUG] Using local SQLALCHEMY_DATABASE_URI: {SQLALCHEMY_DATABASE_URI}")
 
     # Recommended to suppress SQLAlchemy warning
     SQLALCHEMY_TRACK_MODIFICATIONS = False

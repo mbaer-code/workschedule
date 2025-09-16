@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Configuration Variables ---
-# DB_PASS, uses Google Cloud Secret Manager.
+# DB_PASSWORD, uses Google Cloud Secret Manager.
 
 CLOUD_RUN_SERVICE_NAME="workschedule-api" # Your chosen Cloud Run service name
 GCP_PROJECT_ID="work-schedule-cloud"     # Your Google Cloud Project ID
@@ -15,9 +15,30 @@ echo "----------------------------------------"
 
 # Cloud SQL Instance Details
 CLOUD_SQL_INSTANCE_CONNECTION_NAME="work-schedule-cloud:us-central1:workschedule-db"
+CLOUD_SQL_CONNECTION_NAME="work-schedule-cloud:us-central1:workschedule-db"
 DB_USER="postgres"                       # Your Cloud SQL database username
 DB_NAME="workschedule_db"                # Your Cloud SQL database name
-DB_PASSWORD_SECRET_NAME="workschedule-db-password" # Name of your secret in Secret Manager
+DB_PASSWORD_SECRET_NAME="workschedule-db-password:latest" # Name of your secret in Secret Manager
+STRIPE_SECRET_KEY="STRIPE_SECRET_KEY:latest" # Name of the Stripe secret in Secret Manager
+# test
+STRIPE_PRICE_ID="price_1S5WunIDZ9jjdH6b8iKTMc7r"
+# live
+#STRIPE_PRICE_ID="price_1S3hfCRNuiIIf8E1Xi4p8gLw"
+BASE_URL="https://www.myschedule.cloud"
+
+MAILGUN_API_SECRET_NAME="workschedule-mailgun-api-key:latest"
+
+MAILGUN_REPLY_TO="reply@myschedule.cloud"
+MAILGUN_DOMAIN="mg.myschedule.cloud"
+
+
+# Document AI and pdf processing
+GOOGLE_CLOUD_PROJECT_ID="work-schedule-cloud"
+PROJECT_ID="work-schedule-cloud"
+DOCUMENT_AI_LOCATION="us"
+LOCATION="us"
+DOCUMENT_AI_PROCESSOR_ID="fe0baaa28beedbe9"
+PROCESSOR_ID="fe0baaa28beedbe9"
 
 # --- Function to check if a database exists and create it if not ---
 
@@ -55,7 +76,7 @@ echo "--- 2. Retrieving DB Password from Secret Manager ---"
 # However, Cloud Run's --set-secrets is generally preferred for direct secret consumption by the service.
 # For the database creation step, we will still need it here.
 # Ensure your Cloud Shell user or the service account running this script has Secret Manager Secret Accessor role.
-DB_PASS=$(gcloud secrets versions access latest \
+DB_PASSWORD=$(gcloud secrets versions access latest \
     --secret="${DB_PASSWORD_SECRET_NAME}" \
     --project="${GCP_PROJECT_ID}" \
     --format="value(payload.data)" || { echo "Failed to retrieve DB password from Secret Manager!"; exit 1; })
@@ -78,8 +99,21 @@ gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
   --region "${GCP_REGION}" \
   --allow-unauthenticated \
   --add-cloudsql-instances "${CLOUD_SQL_INSTANCE_CONNECTION_NAME}" \
-  --set-env-vars "DB_USER=${DB_USER},DB_NAME=${DB_NAME},INSTANCE_CONNECTION_NAME=${CLOUD_SQL_INSTANCE_CONNECTION_NAME}" \
-  --set-secrets "DB_PASS=${DB_PASSWORD_SECRET_NAME}:latest" 
+  --set-env-vars "DB_USER=${DB_USER}, \
+                  DB_NAME=${DB_NAME}, \
+		  INSTANCE_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}, \
+		  CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}, \
+		  GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}, \
+		  DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION}, \
+		  DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}, \
+		  BASE_URL=${BASE_URL}, \
+                  MAILGUN_DOMAIN=${MAILGUN_DOMAIN}, \
+                  MAILGUN_HOST=${MAILGUN_DOMAIN}, \
+                  MAILGUN_REPLY_TO=${MAILGUN_REPLY_TO}, \
+		  STRIPE_PRICE_ID=${STRIPE_PRICE_ID}" \
+  --set-secrets "DB_PASSWORD=${DB_PASSWORD_SECRET_NAME},  \
+                 MAILGUN_API_KEY=${MAILGUN_API_SECRET_NAME},  \
+                 STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}"
 
 if [ $? -ne 0 ]; then
     echo "Cloud Run deployment failed!"
@@ -98,5 +132,5 @@ SERVICE_URL=$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
 echo "${SERVICE_URL}"
 
 # 6. Final Cleanup (no manual password input to clean up now)
-unset DB_PASS # Unset the variable just in case
+#unset DB_PASS # Unset the variable just in case
 echo "Deployment script finished."

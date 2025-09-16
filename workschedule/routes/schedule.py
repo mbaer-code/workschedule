@@ -156,9 +156,10 @@ def approve_schedule():
             print(f"[DEBUG] approve_schedule: Failed to persist new schedule: {e}")
 
     # Stripe payment logic
-    success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
+    base_url = os.getenv("BASE_URL", "http://127.0.0.1:8080")
+    success_url = f"{base_url}/schedule/payment_success?job_id={job_id}" if job_id else f"{base_url}/schedule/payment_success"
     print(f"[approve_schedule] Stripe success_url: {success_url}")
-    cancel_url = "http://127.0.0.1:8080/schedule/payment_cancel"
+    cancel_url = f"{base_url}/schedule/payment_cancel"
     price_id = os.getenv("STRIPE_PRICE_ID")
     customer_email = schedule_entry.user_email or "test.user@example.com"
     stripe_session = create_checkout_session(
@@ -325,8 +326,8 @@ def upload_pdf():
         from workschedule.models import Schedule
         from workschedule.app import db
         job_id = str(uuid.uuid4())
-        # Save as JSON string
-        schedule_json = json.dumps(final_output)
+        # Save raw parsed_shifts as JSON string for ICS compatibility
+        schedule_json = json.dumps(parsed_shifts, default=str)
         try:
             print(f"[DEBUG] upload_pdf: Creating Schedule entry for job_id={job_id}, user_email={email}")
             schedule_entry = Schedule(
@@ -399,6 +400,8 @@ def payment_success():
     payment_verified = False
     if session_id:
         import stripe
+        import os
+        stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
         stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
         try:
             checkout_session = stripe.checkout.Session.retrieve(session_id)
@@ -447,6 +450,9 @@ def payment_success():
             email = checkout_session.customer_email
         except Exception:
             email = None
+    # Fallback: get email from Schedule DB entry
+    if not email and schedule_entry:
+        email = getattr(schedule_entry, 'user_email', None)
     if not email:
         return render_template('payment_success.html', message="No email found for user.")
     # Use http for localhost, https for cloud
