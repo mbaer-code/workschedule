@@ -128,19 +128,13 @@ def approve_schedule():
     # Fetch schedule from DB
     from workschedule.models import Schedule
     import json
-    try:
-        print(f"[DEBUG] approve_schedule: Querying DB for job_id={job_id}")
-        schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
-        if not schedule_entry:
-            error_message = "No schedule found for this job_id. Cannot proceed to payment."
-            print(f"[ERROR] approve_schedule: {error_message}")
-            return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
-        parsed_schedule = json.loads(schedule_entry.schedule_data)
-        print(f"[DEBUG] approve_schedule: Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
-    except Exception as db_exc:
-        print(f"[ERROR] approve_schedule: DB query failed: {db_exc}")
-        error_message = f"Database error: {db_exc}"
+    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
+    if not schedule_entry:
+        error_message = "No schedule found for this job_id. Cannot proceed to payment."
+        print(f"[DEBUG] ERROR: {error_message}")
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
+    parsed_schedule = json.loads(schedule_entry.schedule_data)
+    print(f"[DEBUG] Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
 
     # If parsed_schedule is empty, try to get it from the form and persist it
     if not parsed_schedule and request.form.get('parsed_schedule'):
@@ -229,17 +223,6 @@ def upload_pdf():
         error_message = "PDF file is required."
         return render_template("upload_schedule_new.html", pdf_error=error_message)
 
-
-    if 'pdfFile' not in request.files:
-        print("[DEBUG] upload_pdf: No pdfFile in request.files")
-        return redirect(url_for('schedule_bp.upload_schedule'))
-
-    pdf_file = request.files['pdfFile']
-    print(f"[DEBUG] upload_pdf: pdf_file.filename={pdf_file.filename}")
-    email = request.form.get('email')
-    timezone = request.form.get('timezone')
-    print(f"[DEBUG] upload_pdf: email={email}, timezone={timezone}")
-
     # Store email and timezone in session for later use in payment flow and ICS generation
     session['user_email'] = email
     session['timezone'] = timezone
@@ -263,16 +246,12 @@ def upload_pdf():
             error_message = "No schedule data found or document could not be processed."
             return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
 
-        print(f"[DEBUG] upload_pdf: Read {len(pdf_contents)} bytes from PDF file")
-
         # 1. Extract only valid work shifts
         parsed_shifts = []
         for entity in entities:
             if entity.type_ == "Work-shift":
                 properties = {prop.type_: prop.mention_text.strip() for prop in entity.properties}
                 
-                print(f"[DEBUG] upload_pdf: extracted_text length={len(extracted_text) if extracted_text else 0}")
-                print(f"[DEBUG] upload_pdf: entities count={len(entities) if entities else 0}")
                 # Check for core properties to ensure it's a complete shift
                 if all(field in properties for field in ['Shift-date', 'Shift-end', 'Start-start', 'Department', 'Store-number']):
                     
@@ -309,9 +288,8 @@ def upload_pdf():
                 **shift
             })
             
-        # Keep the key as 'store_number' for consistency with template
+    # Keep the key as 'store_number' for consistency with template
 
-        print(f"[DEBUG] upload_pdf: parsed_shifts count={len(parsed_shifts)}")
         # Prepare data for the HTML template
         entities_as_dicts = [entity_to_dict(entity) for entity in entities]
         formatted_json = json.dumps(entities_as_dicts, indent=4)
@@ -324,20 +302,13 @@ def upload_pdf():
         job_id = str(uuid.uuid4())
         # Save as JSON string
         schedule_json = json.dumps(final_output)
-        try:
-            print(f"[DEBUG] upload_pdf: Creating Schedule entry for job_id={job_id}, user_email={email}")
-            schedule_entry = Schedule(
-                user_email=email,
-                job_id=job_id,
-                schedule_data=schedule_json
-            )
-            db.session.add(schedule_entry)
-            db.session.commit()
-            print(f"[DEBUG] upload_pdf: Schedule entry committed to DB for job_id={job_id}")
-        except Exception as db_exc:
-            print(f"[ERROR] upload_pdf: Failed to commit Schedule entry to DB: {db_exc}")
-            error_message = f"Database error: {db_exc}"
-            return render_template("review_schedule.html", raw_json=error_message, job_id=job_id)
+        schedule_entry = Schedule(
+            user_email=email,
+            job_id=job_id,
+            schedule_data=schedule_json
+        )
+        db.session.add(schedule_entry)
+        db.session.commit()
 
         # Store job_id in session for use in approval and export
         session['job_id'] = job_id
