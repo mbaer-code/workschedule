@@ -418,10 +418,9 @@ def payment_success():
     parsed_schedule = json.loads(schedule_entry.schedule_data)
 
     # 4. Generate ICS file
-    from workschedule.services.ics_generator import extract_shifts_from_docai_entities, create_ics_from_entries
-    shift_entries = extract_shifts_from_docai_entities(parsed_schedule)
+    from workschedule.services.ics_generator import create_ics_from_entries
     calendar_name = "myschedule.cloud"
-    ics_content = create_ics_from_entries(shift_entries, calendar_name=calendar_name)
+    ics_content = create_ics_from_entries(parsed_schedule, calendar_name=calendar_name)
 
     # 5. Send email
     from workschedule.services.mailgun_service import send_simple_message
@@ -431,6 +430,9 @@ def payment_success():
             email = checkout_session.customer_email
         except Exception:
             email = None
+    # Fallback: get email from Schedule DB entry
+    if not email and schedule_entry:
+        email = getattr(schedule_entry, 'user_email', None)
     if not email:
         return render_template('payment_success.html', message="No email found for user.")
 
