@@ -13,6 +13,8 @@ from workschedule.services.stripe_service import create_checkout_session
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
 
+BASE_URL= os.getenv("BASE_URL")
+
 # Export to Calendar route
 @schedule_bp.route('/export_calendar', methods=['POST'])
 def export_calendar():
@@ -49,10 +51,14 @@ def export_calendar():
     # Generate download link for the ICS file
     job_id = session.get('job_id', 'unknown')
     # Use http for localhost, https for cloud
-    if request.host.startswith("127.0.0.1") or request.host.startswith("localhost"):
-        download_url = f"http://{request.host}/schedule/download/{job_id}"
-    else:
-        download_url = f"https://{request.host}/schedule/download/{job_id}"
+
+    #if request.host.startswith("127.0.0.1") or request.host.startswith("localhost"):
+    #    download_url = f"http://{request.host}/schedule/download/{job_id}"
+    #else:
+    #    download_url = f"https://{request.host}/schedule/download/{job_id}"
+
+    download_url = f"{BASE_URL}/schedule/download/{job_id}"
+
     subject = f"Your {calendar_name} Schedule ICS File"
     text_content = (
         "Your work schedule is ready! You can import it into Google Calendar, Apple Calendar, or Outlook.\n\n"
@@ -149,9 +155,19 @@ def approve_schedule():
             print(f"[DEBUG] approve_schedule: Failed to persist new schedule: {e}")
 
     # Stripe payment logic
-    success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
+    #success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
+    #success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" 
+    #cancel_url = "http://127.0.0.1:8080/schedule/payment_cancel"
+
+    if job_id: 
+        success_url = f"{BASE_URL}/schedule/payment_success?job_id={job_id}"
+    else:
+        success_url = f"{BASE_URL}/schedule/payment_success"
+
     print(f"[approve_schedule] Stripe success_url: {success_url}")
-    cancel_url = "http://127.0.0.1:8080/schedule/payment_cancel"
+
+    cancel_url = f"{BASE_URL}/schedule/payment_cancel"
+
     price_id = os.getenv("STRIPE_PRICE_ID")
     customer_email = schedule_entry.user_email or "test.user@example.com"
     stripe_session = create_checkout_session(
@@ -417,11 +433,15 @@ def payment_success():
             email = None
     if not email:
         return render_template('payment_success.html', message="No email found for user.")
+
     # Use http for localhost, https for cloud
-    if request.host.startswith("127.0.0.1") or request.host.startswith("localhost"):
-        download_url = f"http://{request.host}/schedule/download/{job_id}"
-    else:
-        download_url = f"https://{request.host}/schedule/download/{job_id}"
+    #if request.host.startswith("127.0.0.1") or request.host.startswith("localhost"):
+    #    download_url = f"http://{request.host}/schedule/download/{job_id}"
+    #else:
+    #    download_url = f"https://{request.host/schedule/download/{job_id}"}
+    download_url = f"{BASE_URL}/schedule/download/{job_id}"
+
+
     subject = f"Your {calendar_name} Schedule ICS File"
     text_content = (
         "Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook.\n\n"
