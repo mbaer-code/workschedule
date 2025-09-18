@@ -11,6 +11,12 @@
         <p>Thank you for your payment. Your schedule has been approved and processed.</p>
         <p>{{ message }}</p>
         <br><br>
+        {% if ics_link %}
+        <a href="{{ ics_link }}" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:bg-blue-700 transition-colors duration-300" target="_blank">
+            Download Calendar (.ics)
+        </a>
+        <br><br>
+        {% endif %}
         <a href="/">Return to Dashboard</a>
     </div>
 </body>

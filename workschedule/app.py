@@ -2,13 +2,14 @@
 import os
 import sys
 
-#from flask import Flask, redirect, url_for
 from flask import Flask, request, redirect, url_for, flash, session, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.exc import SQLAlchemyError
 from google.cloud import storage
 from werkzeug.utils import secure_filename
+
+import workschedule.services.ics_delivery
 
 from dotenv import load_dotenv
 import logging
@@ -59,7 +60,8 @@ logging.debug("Extensions initialized.")
 # --- Google Cloud Storage client setup ---
 try:
     storage_client = storage.Client()
-    GCS_BUCKET_NAME = os.environ.get("FIREBASE_STORAGE_BUCKET", "your-gcs-bucket-name")
+    #GCS_BUCKET_NAME = os.environ.get("FIREBASE_STORAGE_BUCKET", "your-gcs-bucket-name")
+    GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "gs://work-schedule-cloud/")
     gcs_bucket = storage_client.bucket(GCS_BUCKET_NAME)
 except Exception as e:
     logging.error(f"Failed to initialize Google Cloud Storage client: {e}")

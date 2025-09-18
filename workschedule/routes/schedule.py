@@ -19,7 +19,7 @@ BASE_URL= os.getenv("BASE_URL")
 @schedule_bp.route('/export_calendar', methods=['POST'])
 def export_calendar():
     from workschedule.services.ics_generator import extract_shifts_from_docai_entities, create_ics_from_entries
-    from workschedule.services.mailgun_service import send_simple_message
+    import workschedule.services.ics_delivery
     from flask import make_response, request
     from workschedule.models import Schedule
     job_id_form = request.form.get('job_id')
@@ -378,96 +378,39 @@ def create_session():
 
 @schedule_bp.route('/payment_success', methods=['GET'])
 def payment_success():
+    # Defensive: Assign job_id, schedule_entry, and parsed_schedule before error checks
+    job_id = request.args.get('job_id')
+    from workschedule.models import Schedule
+    import json
+    schedule_entry = Schedule.query.filter_by(job_id=job_id).first() if job_id else None
+    parsed_schedule = json.loads(schedule_entry.schedule_data) if schedule_entry else None
+    # Error checks
+    if not job_id:
+        return jsonify({"error": "No job_id found. Cannot retrieve schedule."}), 400
+    if not schedule_entry:
+        return jsonify({"error": "No schedule found for this job_id."}), 404
+    if not parsed_schedule:
+        return jsonify({"error": "No schedule data found."}), 404
     # 1. Verify payment (optional, recommended)
     session_id = request.args.get('session_id')
     payment_verified = False
     if session_id:
         import stripe
         stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-        try:
-            checkout_session = stripe.checkout.Session.retrieve(session_id)
-            if checkout_session.payment_status == 'paid':
-                payment_verified = True
-        except Exception as e:
-            return render_template('payment_success.html', message=f"Error verifying payment: {e}")
+        # --- NEW LOGIC ---
 
-    if not payment_verified and session_id:
-        return render_template('payment_success.html', message="Payment not verified.")
-
-    # 2. Retrieve job_id from session or Stripe metadata
-    job_id = request.args.get('job_id') or session.get('job_id')
-    print(f"[payment_success] job_id from request.args: {request.args.get('job_id')}")
-    print(f"[payment_success] job_id from session: {job_id}")
-    if not job_id and session_id:
-        try:
-            job_id = checkout_session.metadata.get('job_id')
-            print(f"[payment_success] job_id from Stripe metadata: {job_id}")
-        except Exception as e:
-            print(f"[payment_success] ERROR retrieving job_id from Stripe metadata: {e}")
-            job_id = None
-    if not job_id:
-        print(f"[payment_success] ERROR: No job_id found. Cannot retrieve schedule.")
-        return render_template('payment_success.html', message="No job_id found. Cannot retrieve schedule.")
-
-    # 3. Fetch schedule from database
-    from workschedule.models import Schedule
-    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
-    if not schedule_entry:
-        return render_template('payment_success.html', message="No schedule found for this job_id.")
-    import json
-    parsed_schedule = json.loads(schedule_entry.schedule_data)
-
-    # 4. Generate ICS file
+    # Generate ICS content and deliver via GCS
     from workschedule.services.ics_generator import create_ics_from_entries
+    from workschedule.services.ics_delivery import deliver_ics_file
     calendar_name = "myschedule.cloud"
     ics_content = create_ics_from_entries(parsed_schedule, calendar_name=calendar_name)
-
-    # 5. Send email
-    from workschedule.services.mailgun_service import send_simple_message
-    email = session.get('user_email')
-    if not email and session_id:
-        try:
-            email = checkout_session.customer_email
-        except Exception:
-            email = None
-    # Fallback: get email from Schedule DB entry
-    if not email and schedule_entry:
-        email = getattr(schedule_entry, 'user_email', None)
-    if not email:
-        return render_template('payment_success.html', message="No email found for user.")
-
-    # Use http for localhost, https for cloud
-    #if request.host.startswith("127.0.0.1") or request.host.startswith("localhost"):
-    #    download_url = f"http://{request.host}/schedule/download/{job_id}"
-    #else:
-    #    download_url = f"https://{request.host/schedule/download/{job_id}"}
-    download_url = f"{BASE_URL}/schedule/download/{job_id}"
-
-
-    subject = f"Your {calendar_name} Schedule ICS File"
-    text_content = (
-        "Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook.\n\n"
-        f"Download your calendar file here: {download_url}"
+    magic_link = deliver_ics_file(ics_content)
+    return render_template(
+        'payment_success.html',
+        ics_link=magic_link,
+        message="Payment successful. Your schedule is ready.",
+        success=True
     )
-    html_content = (
-        f"<p>Attached is your work schedule as an ICS file. You can import it into Google Calendar, Apple Calendar, or Outlook.</p>"
-        f"<p><a href='{download_url}'>Download your calendar file</a></p>"
-    )
-    send_success = send_simple_message(
-        to_email=email,
-        subject=subject,
-        text_content=text_content,
-        html_content=html_content,
-        attachment_bytes=ics_content.encode('utf-8'),
-        attachment_filename=f"{calendar_name}.ics"
-    )
-
-    # 6. Render success page
-    if send_success:
-        message = f"ICS file sent to {email}. Check your inbox!"
-    else:
-        message = f"Failed to send ICS file to {email}. Please try again."
-    return render_template('payment_success.html', message=message)
 
 @schedule_bp.route('/payment_cancel', methods=['GET'])
 def payment_cancel():

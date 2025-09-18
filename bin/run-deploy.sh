@@ -25,6 +25,9 @@ STRIPE_PRICE_ID="price_1S5WunIDZ9jjdH6b8iKTMc7r"
 # live
 #STRIPE_PRICE_ID="price_1S3hfCRNuiIIf8E1Xi4p8gLw"
 BASE_URL="https://www.myschedule.cloud"
+GCS_BUCKET_NAME="work-schedule-cloud"
+GOOGLE_APPLICATION_CREDENTIALS="/instance/service-account.json"
+
 
 MAILGUN_API_SECRET_NAME="workschedule-mailgun-api-key:latest"
 
@@ -107,6 +110,8 @@ gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
 		  DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION}, \
 		  DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}, \
 		  BASE_URL=${BASE_URL}, \
+                  GCS_BUCKET_NAME=${GCS_BUCKET_NAME}, \
+                  GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}, \
                   MAILGUN_DOMAIN=${MAILGUN_DOMAIN}, \
                   MAILGUN_HOST=${MAILGUN_DOMAIN}, \
                   MAILGUN_REPLY_TO=${MAILGUN_REPLY_TO}, \
