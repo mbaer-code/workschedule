@@ -1,12 +1,8 @@
 # Use the official Python image as a base image
 FROM python:3.10-slim-bullseye
 
-
-COPY service-account.json /instance/service-account.json
-
 # Set the working directory in the container
 WORKDIR /app
-
 
 # Install dependencies
 # Copy requirements.txt first to leverage Docker caching

@@ -7,4 +7,3 @@ venv/
 tests/
 *.pyc
 __pycache__/
-instance/

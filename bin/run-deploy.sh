@@ -18,19 +18,17 @@ CLOUD_SQL_INSTANCE_CONNECTION_NAME="work-schedule-cloud:us-central1:workschedule
 CLOUD_SQL_CONNECTION_NAME="work-schedule-cloud:us-central1:workschedule-db"
 DB_USER="postgres"                       # Your Cloud SQL database username
 DB_NAME="workschedule_db"                # Your Cloud SQL database name
-DB_PASSWORD_SECRET_NAME="workschedule-db-password:latest" # Name of your secret in Secret Manager
-STRIPE_SECRET_KEY="STRIPE_SECRET_KEY:latest" # Name of the Stripe secret in Secret Manager
-# test
-STRIPE_PRICE_ID="price_1S5WunIDZ9jjdH6b8iKTMc7r"
-# live
-#STRIPE_PRICE_ID="price_1S3hfCRNuiIIf8E1Xi4p8gLw"
-BASE_URL="https://www.myschedule.cloud"
-GCS_BUCKET_NAME="work-schedule-cloud"
-GOOGLE_APPLICATION_CREDENTIALS="/instance/service-account.json"
 
-
+# Secret Manager variable names (no version suffix)
+DB_PASSWORD_SECRET_NAME="workschedule-db-password:latest"
+STRIPE_SECRET_KEY="STRIPE_SECRET_KEY:latest"
 MAILGUN_API_SECRET_NAME="workschedule-mailgun-api-key:latest"
 
+# Other config
+STRIPE_PRICE_ID="price_1S5WunIDZ9jjdH6b8iKTMc7r" # test
+#STRIPE_PRICE_ID="price_1S3hfCRNuiIIf8E1Xi4p8gLw" # live
+BASE_URL="https://www.myschedule.cloud"
+GCS_BUCKET_NAME="work-schedule-cloud"
 MAILGUN_REPLY_TO="reply@myschedule.cloud"
 MAILGUN_DOMAIN="mg.myschedule.cloud"
 
@@ -79,7 +77,7 @@ echo "--- 2. Retrieving DB Password from Secret Manager ---"
 # However, Cloud Run's --set-secrets is generally preferred for direct secret consumption by the service.
 # For the database creation step, we will still need it here.
 # Ensure your Cloud Shell user or the service account running this script has Secret Manager Secret Accessor role.
-DB_PASSWORD=$(gcloud secrets versions access latest \
+DB_PASSWORD=$(gcloud secrets versions access \
     --secret="${DB_PASSWORD_SECRET_NAME}" \
     --project="${GCP_PROJECT_ID}" \
     --format="value(payload.data)" || { echo "Failed to retrieve DB password from Secret Manager!"; exit 1; })
@@ -111,14 +109,13 @@ gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
 		  DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}, \
 		  BASE_URL=${BASE_URL}, \
                   GCS_BUCKET_NAME=${GCS_BUCKET_NAME}, \
-                  GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}, \
                   MAILGUN_DOMAIN=${MAILGUN_DOMAIN}, \
                   MAILGUN_HOST=${MAILGUN_DOMAIN}, \
                   MAILGUN_REPLY_TO=${MAILGUN_REPLY_TO}, \
 		  STRIPE_PRICE_ID=${STRIPE_PRICE_ID}" \
-  --set-secrets "DB_PASSWORD=${DB_PASSWORD_SECRET_NAME},  \
-                 MAILGUN_API_KEY=${MAILGUN_API_SECRET_NAME},  \
-                 STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}"
+    --set-secrets "DB_PASSWORD=${DB_PASSWORD_SECRET_NAME},  \
+                  MAILGUN_API_KEY=${MAILGUN_API_SECRET_NAME},  \
+                  STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}"
 
 if [ $? -ne 0 ]; then
     echo "Cloud Run deployment failed!"

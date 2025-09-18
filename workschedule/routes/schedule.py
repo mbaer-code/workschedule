@@ -126,6 +126,10 @@ def approve_schedule():
     print(f"[DEBUG] request.args: {request.args}")
     job_id = request.args.get('job_id') or request.form.get('job_id')
     print(f"[DEBUG] Received job_id: {job_id}")
+    if job_id:
+        print(f"[DEBUG] Checking DB for job_id: {job_id}")
+    else:
+        print("[DEBUG] No job_id provided to approve_schedule.")
     if not job_id:
         error_message = "No job_id found. Cannot proceed to payment."
         print(f"[DEBUG] ERROR: {error_message}")
@@ -136,11 +140,16 @@ def approve_schedule():
     import json
     schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
     if not schedule_entry:
-        error_message = "No schedule found for this job_id. Cannot proceed to payment."
+        error_message = f"No schedule found for job_id={job_id}. Cannot proceed to payment."
         print(f"[DEBUG] ERROR: {error_message}")
-        return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
-    parsed_schedule = json.loads(schedule_entry.schedule_data)
-    print(f"[DEBUG] Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
+        return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message, job_id=job_id)
+    print(f"[DEBUG] Found schedule_entry: {schedule_entry}")
+    try:
+        parsed_schedule = json.loads(schedule_entry.schedule_data)
+        print(f"[DEBUG] Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
+    except Exception as e:
+        print(f"[DEBUG] Failed to load schedule_data for job_id={job_id}: {e}")
+        parsed_schedule = []
 
     # If parsed_schedule is empty, try to get it from the form and persist it
     if not parsed_schedule and request.form.get('parsed_schedule'):
@@ -153,6 +162,7 @@ def approve_schedule():
             parsed_schedule = new_schedule
         except Exception as e:
             print(f"[DEBUG] approve_schedule: Failed to persist new schedule: {e}")
+    print(f"[DEBUG] Final parsed_schedule for job_id={job_id}: {parsed_schedule}")
 
     # Stripe payment logic
     #success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
