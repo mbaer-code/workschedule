@@ -9,8 +9,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+
 # Copy the rest of your application code
+
 COPY . .
+
 
 # Define the entrypoint for the container
 # This will simply start your Gunicorn application.

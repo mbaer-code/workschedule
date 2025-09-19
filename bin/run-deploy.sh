@@ -20,9 +20,9 @@ DB_USER="postgres"                       # Your Cloud SQL database username
 DB_NAME="workschedule_db"                # Your Cloud SQL database name
 
 # Secret Manager variable names (no version suffix)
-DB_PASSWORD_SECRET_NAME="workschedule-db-password:latest"
-STRIPE_SECRET_KEY="STRIPE_SECRET_KEY:latest"
-MAILGUN_API_SECRET_NAME="workschedule-mailgun-api-key:latest"
+DB_PASSWORD_SECRET_NAME="workschedule-db-password"
+STRIPE_SECRET_KEY="STRIPE_SECRET_KEY"
+MAILGUN_API_SECRET_NAME="workschedule-mailgun-api-key"
 
 # Other config
 STRIPE_PRICE_ID="price_1S5WunIDZ9jjdH6b8iKTMc7r" # test
@@ -71,19 +71,23 @@ check_and_create_db() {
 # The 'postgres' user typically has this. If you use a different user, ensure it has this grant.
 check_and_create_db
 
-# 2. Get DB password from Secret Manager securely
 echo "--- 2. Retrieving DB Password from Secret Manager ---"
+
+# 2. Get DB password from Secret Manager securely
 # We need to explicitly access the secret value here if we're passing it via --set-env-vars.
 # However, Cloud Run's --set-secrets is generally preferred for direct secret consumption by the service.
 # For the database creation step, we will still need it here.
 # Ensure your Cloud Shell user or the service account running this script has Secret Manager Secret Accessor role.
-DB_PASSWORD=$(gcloud secrets versions access \
-    --secret="${DB_PASSWORD_SECRET_NAME}" \
+
+DB_PASSWORD=$(gcloud secrets versions access latest --secret="workschedule-db-password" \
     --project="${GCP_PROJECT_ID}" \
     --format="value(payload.data)" || { echo "Failed to retrieve DB password from Secret Manager!"; exit 1; })
 
-# 3. Build the Docker Image
+
 echo "--- 3.  Starting Cloud Build for Docker Image ---"
+
+# 3. Build the Docker Image
+
 IMAGE_TAG="gcr.io/${GCP_PROJECT_ID}/workschedule-cloud-app"
 echo "--- Image TAG = ${IMAGE_TAG} ---"
 gcloud  builds submit \
@@ -92,8 +96,10 @@ gcloud  builds submit \
 
 echo "Cloud Build successful. Image tagged as ${IMAGE_TAG}"
 
-# 4. Deploy to Cloud Run
 echo "--- 4.  Starting Cloud Run Deployment ---"
+
+# 4. Deploy to Cloud Run
+
 gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
   --image "${IMAGE_TAG}" \
   --platform managed \
@@ -113,9 +119,9 @@ gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
                   MAILGUN_HOST=${MAILGUN_DOMAIN}, \
                   MAILGUN_REPLY_TO=${MAILGUN_REPLY_TO}, \
 		  STRIPE_PRICE_ID=${STRIPE_PRICE_ID}" \
-    --set-secrets "DB_PASSWORD=${DB_PASSWORD_SECRET_NAME},  \
-                  MAILGUN_API_KEY=${MAILGUN_API_SECRET_NAME},  \
-                  STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}"
+    --set-secrets "DB_PASSWORD=${DB_PASSWORD_SECRET_NAME}:latest,  \
+                  MAILGUN_API_KEY=${MAILGUN_API_SECRET_NAME}:latest,  \
+                  STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}:latest"
 
 if [ $? -ne 0 ]; then
     echo "Cloud Run deployment failed!"
