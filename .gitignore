@@ -21,6 +21,7 @@ junk*
 # Local environment variables and sensitive files
 .env
 instance/
+service-account.json
 !instance/.gitkeep
 credentials.json
 token.json

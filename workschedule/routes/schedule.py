@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
 from workschedule.services.stripe_service import create_checkout_session
 
- # Create a Blueprint for schedule-related routes
+# Create a Blueprint for schedule-related routes
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
                         template_folder=os.path.join(os.path.dirname(__file__), '..', 'templates'))
 
@@ -131,28 +131,22 @@ def approve_schedule():
         print(f"[DEBUG] ERROR: {error_message}")
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
 
-    # Fetch schedule from DB
-    from workschedule.models import Schedule
-    import json
-    schedule_entry = Schedule.query.filter_by(job_id=job_id).first()
-    if not schedule_entry:
-        error_message = "No schedule found for this job_id. Cannot proceed to payment."
-        print(f"[DEBUG] ERROR: {error_message}")
+    # Fetch schedule from GCS bucket
+    parsed_blob = session.get('parsed_blob') or f"parsed/{job_id}.json"
+    bucket_name = os.environ.get('GCS_BUCKET_NAME', 'work-schedule-parsed')
+    from google.cloud import storage
+    gcs_client = storage.Client()
+    bucket = gcs_client.bucket(bucket_name)
+    blob = bucket.blob(parsed_blob)
+    try:
+        schedule_json = blob.download_as_text()
+        print(f"[DEBUG] approve_schedule: downloaded from bucket {bucket_name} parsed_blob {parsed_blob}: {schedule_json}")
+        parsed_schedule = json.loads(schedule_json)
+        print(f"[DEBUG] approve_schedule: parsed_schedule loaded from GCS: {parsed_schedule}")
+    except Exception as e:
+        error_message = f"Error loading parsed schedule from GCS: {e}"
+        print(f"[DEBUG] approve_schedule: {error_message}")
         return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
-    parsed_schedule = json.loads(schedule_entry.schedule_data)
-    print(f"[DEBUG] Loaded schedule from DB for job_id={job_id}: {parsed_schedule}")
-
-    # If parsed_schedule is empty, try to get it from the form and persist it
-    if not parsed_schedule and request.form.get('parsed_schedule'):
-        try:
-            new_schedule = json.loads(request.form.get('parsed_schedule'))
-            print(f"[DEBUG] approve_schedule: Persisting new schedule for job_id={job_id}: {new_schedule}")
-            schedule_entry.schedule_data = json.dumps(new_schedule)
-            from workschedule.app import db
-            db.session.commit()
-            parsed_schedule = new_schedule
-        except Exception as e:
-            print(f"[DEBUG] approve_schedule: Failed to persist new schedule: {e}")
 
     # Stripe payment logic
     #success_url = f"http://127.0.0.1:8080/schedule/payment_success?job_id={job_id}" if job_id else "http://127.0.0.1:8080/schedule/payment_success"
@@ -169,7 +163,7 @@ def approve_schedule():
     cancel_url = f"{BASE_URL}/schedule/payment_cancel"
 
     price_id = os.getenv("STRIPE_PRICE_ID")
-    customer_email = schedule_entry.user_email or "test.user@example.com"
+    customer_email = session.get('user_email', "test.user@example.com")
     stripe_session = create_checkout_session(
         price_id,
         customer_email,
@@ -194,7 +188,8 @@ from werkzeug.utils import secure_filename
 from src.services.documentai_processor import process_pdf_documentai_from_bytes
 from workschedule.services.stripe_service import create_checkout_session
 
- # ...existing code...
+# Remove stray top-level code fragments from previous patch attempts
+# All logic for GCS bucket upload/download is now inside upload_pdf and approve_schedule
 
 def entity_to_dict(entity):
     """Recursively converts a Document AI entity to a dictionary."""
@@ -310,24 +305,21 @@ def upload_pdf():
         entities_as_dicts = [entity_to_dict(entity) for entity in entities]
         formatted_json = json.dumps(entities_as_dicts, indent=4)
 
-
-        # Persist parsed schedule to database
+        # Persist parsed schedule to GCS bucket
         import uuid
-        from workschedule.models import Schedule
-        from workschedule.app import db
         job_id = str(uuid.uuid4())
-        # Save as JSON string
         schedule_json = json.dumps(final_output)
-        schedule_entry = Schedule(
-            user_email=email,
-            job_id=job_id,
-            schedule_data=schedule_json
-        )
-        db.session.add(schedule_entry)
-        db.session.commit()
+        bucket_name = os.environ.get('GCS_BUCKET_NAME', 'work-schedule-parsed')
+        from google.cloud import storage
+        gcs_client = storage.Client()
+        bucket = gcs_client.bucket(bucket_name)
+        blob = bucket.blob(f"parsed/{job_id}.json")
+        print(f"[DEBUG] upload_pdf: uploading to bucket {bucket_name} as parsed/{job_id}.json: {schedule_json}")
+        blob.upload_from_string(schedule_json, content_type='application/json')
+        print(f"[DEBUG] upload_pdf: uploaded parsed schedule to GCS as parsed/{job_id}.json")
 
-        # Store job_id in session for use in approval and export
         session['job_id'] = job_id
+        session['parsed_blob'] = f"parsed/{job_id}.json"
 
         # Pass job_id to template for later use
         return render_template(
@@ -380,17 +372,19 @@ def create_session():
 def payment_success():
     # Defensive: Assign job_id, schedule_entry, and parsed_schedule before error checks
     job_id = request.args.get('job_id')
-    from workschedule.models import Schedule
-    import json
-    schedule_entry = Schedule.query.filter_by(job_id=job_id).first() if job_id else None
-    parsed_schedule = json.loads(schedule_entry.schedule_data) if schedule_entry else None
-    # Error checks
-    if not job_id:
-        return jsonify({"error": "No job_id found. Cannot retrieve schedule."}), 400
-    if not schedule_entry:
-        return jsonify({"error": "No schedule found for this job_id."}), 404
-    if not parsed_schedule:
-        return jsonify({"error": "No schedule data found."}), 404
+    parsed_blob = f"parsed/{job_id}.json"
+    bucket_name = os.environ.get('GCS_BUCKET_NAME', 'work-schedule-parsed')
+    from google.cloud import storage
+    gcs_client = storage.Client()
+    bucket = gcs_client.bucket(bucket_name)
+    blob = bucket.blob(parsed_blob)
+    try:
+        schedule_json = blob.download_as_text()
+        print(f"[DEBUG] payment_success: downloaded from bucket {bucket_name} parsed_blob {parsed_blob}: {schedule_json}")
+        parsed_schedule = json.loads(schedule_json)
+        print(f"[DEBUG] payment_success: parsed_schedule loaded from GCS: {parsed_schedule}")
+    except Exception as e:
+        return jsonify({"error": f"Error loading schedule from GCS: {e}"}), 404
     # 1. Verify payment (optional, recommended)
     session_id = request.args.get('session_id')
     payment_verified = False

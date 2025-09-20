@@ -35,6 +35,7 @@ MAILGUN_DOMAIN="mg.myschedule.cloud"
 
 # Document AI and pdf processing
 GOOGLE_CLOUD_PROJECT_ID="work-schedule-cloud"
+GOOGLE_APPLICATION_CREDENTIALS="/instance/service-account.json"
 PROJECT_ID="work-schedule-cloud"
 DOCUMENT_AI_LOCATION="us"
 LOCATION="us"
@@ -108,17 +109,18 @@ gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
   --add-cloudsql-instances "${CLOUD_SQL_INSTANCE_CONNECTION_NAME}" \
   --set-env-vars "DB_USER=${DB_USER}, \
                   DB_NAME=${DB_NAME}, \
-		  INSTANCE_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}, \
-		  CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}, \
-		  GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}, \
-		  DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION}, \
-		  DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}, \
-		  BASE_URL=${BASE_URL}, \
+                  INSTANCE_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}, \
+                  CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME}, \
+                  GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}, \
+                  GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}, \
+                  DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION}, \
+                  DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}, \
+                  BASE_URL=${BASE_URL}, \
                   GCS_BUCKET_NAME=${GCS_BUCKET_NAME}, \
                   MAILGUN_DOMAIN=${MAILGUN_DOMAIN}, \
                   MAILGUN_HOST=${MAILGUN_DOMAIN}, \
                   MAILGUN_REPLY_TO=${MAILGUN_REPLY_TO}, \
-		  STRIPE_PRICE_ID=${STRIPE_PRICE_ID}" \
+                  STRIPE_PRICE_ID=${STRIPE_PRICE_ID}" \
     --set-secrets "DB_PASSWORD=${DB_PASSWORD_SECRET_NAME}:latest,  \
                   MAILGUN_API_KEY=${MAILGUN_API_SECRET_NAME}:latest,  \
                   STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}:latest"
@@ -140,5 +142,8 @@ SERVICE_URL=$(gcloud run services describe "${CLOUD_RUN_SERVICE_NAME}" \
 echo "${SERVICE_URL}"
 
 # 6. Final Cleanup (no manual password input to clean up now)
-#unset DB_PASS # Unset the variable just in case
+unset DB_PASS # Unset the variable just in case
 echo "Deployment script finished."
+#
+#
+#
