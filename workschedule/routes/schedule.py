@@ -6,8 +6,10 @@ from flask import session
 import stripe
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
-from src.services.documentai_processor import process_pdf_documentai_from_bytes
+import re
+import fitz  # PyMuPDF for PDF text extraction
 from workschedule.services.stripe_service import create_checkout_session
+from workschedule.services.mailgun_service import send_simple_message
 
 # Create a Blueprint for schedule-related routes
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
@@ -164,12 +166,15 @@ def approve_schedule():
 
     price_id = os.getenv("STRIPE_PRICE_ID")
     customer_email = session.get('user_email', "test.user@example.com")
+    coupon_code = request.form.get('coupon_code') or request.args.get('coupon_code')
+    
     stripe_session = create_checkout_session(
         price_id,
         customer_email,
         success_url=success_url,
         cancel_url=cancel_url,
-        metadata={'job_id': job_id}
+        metadata={'job_id': job_id},
+        coupon_code=coupon_code
     )
     print(f"[approve_schedule] Stripe session metadata: {stripe_session.metadata if hasattr(stripe_session, 'metadata') else 'No metadata'}")
     if not stripe_session or not hasattr(stripe_session, 'url'):
@@ -190,6 +195,85 @@ from workschedule.services.stripe_service import create_checkout_session
 
 # Remove stray top-level code fragments from previous patch attempts
 # All logic for GCS bucket upload/download is now inside upload_pdf and approve_schedule
+
+def extract_text_from_pdf(pdf_contents):
+    """Extract text from PDF using PyMuPDF."""
+    try:
+        doc = fitz.open(stream=pdf_contents, filetype="pdf")
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        return text
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        return ""
+
+def parse_schedule_text(text):
+    """Parse schedule text directly without CSV intermediate step."""
+    print("=== EXTRACTED TEXT ===")
+    print(text[:500] + "..." if len(text) > 500 else text)
+    print("=== END EXTRACTED TEXT ===")
+    
+    results = []
+    
+    if "not assigned" in text.lower() or "not scheduled" in text.lower():
+        return results
+
+    # Find all shift patterns with their associated store/department info
+    # Look for: "Sep 22 1:30 PM - 10:00 PM [8:00] 0660 - Store 026 - Plumbing & Bath Associate"
+    full_shift_pattern = re.compile(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)\s*\[[\d:]+\]\s*(\d{4})\s*-\s*Store\s+(\d{3})', re.IGNORECASE)
+    full_shifts = full_shift_pattern.findall(text)
+    
+    if full_shifts:
+        print(f"Found {len(full_shifts)} shifts with full store/dept info: {full_shifts}")
+        for shift in full_shifts:
+            month, date, start_time, end_time, dept_code, store_code = shift
+            
+            results.append({
+                'username': '',
+                'store_number': f"#{dept_code}",  # e.g., "#0660"
+                'weekday': '',
+                'month': month,
+                'date': date,
+                'shift_start': start_time,
+                'meal_start': '',
+                'meal_end': '',
+                'shift_end': end_time,
+                'department': store_code  # e.g., "026"
+            })
+    else:
+        # Fallback to simpler pattern if full pattern doesn't match
+        shift_pattern = re.compile(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)', re.IGNORECASE)
+        shifts = shift_pattern.findall(text)
+        
+        # Try to extract default store/dept from anywhere in text
+        store_match = re.search(r'(\d{4})\s*-\s*Store', text)  # Gets 0660
+        dept_match = re.search(r'Store\s+(\d{3})', text)  # Gets 026
+        
+        default_store = f"#{store_match.group(1)}" if store_match else ''  # #0660
+        default_dept = dept_match.group(1) if dept_match else ''  # 026
+        
+        print(f"Found {len(shifts)} shifts with fallback pattern, using defaults: store={default_store}, dept={default_dept}")
+        
+        for shift in shifts:
+            month, date, start_time, end_time = shift
+            
+            results.append({
+                'username': '',
+                'store_number': default_store,
+                'weekday': '',
+                'month': month,
+                'date': date,
+                'shift_start': start_time,
+                'meal_start': '',
+                'meal_end': '',
+                'shift_end': end_time,
+                'department': default_dept
+            })
+    
+    print(f"Parsed {len(results)} total shifts")
+    return results
 
 def entity_to_dict(entity):
     """Recursively converts a Document AI entity to a dictionary."""
@@ -251,46 +335,50 @@ def upload_pdf():
         return redirect(url_for('schedule_bp.upload_schedule'))
     
     try:
-        extracted_text, entities = process_pdf_documentai_from_bytes(pdf_contents)
-
-        if not entities:
+        # Extract text from PDF
+        extracted_text = extract_text_from_pdf(pdf_contents)
+        
+        if not extracted_text or len(extracted_text.strip()) < 50:
             error_message = "No schedule data found or document could not be processed."
             return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
 
-        # 1. Extract only valid work shifts
-        parsed_shifts = []
-        for entity in entities:
-            if entity.type_ == "Work-shift":
-                properties = {prop.type_: prop.mention_text.strip() for prop in entity.properties}
-                
-                # Check for core properties to ensure it's a complete shift
-                if all(field in properties for field in ['Shift-date', 'Shift-end', 'Start-start', 'Department', 'Store-number']):
-                    
-                    shift_date_raw = properties.get('Shift-date', '')
-                    
-                    try:
-                        date_str = shift_date_raw.replace('\n', ' ').strip()
-                        parsed_date = datetime.datetime.strptime(date_str, '%b %d').date().replace(year=datetime.date.today().year)
-                        
-                        # Get the department value and remove "Associate" if it exists
-                        department_name = properties.get('Department', '')
-                        if department_name.endswith(' Associate'):
-                            department_name = department_name[:-len(' Associate')]
-                        
-                        parsed_shifts.append({
-                            'shift_date': parsed_date,
-                            'department': department_name,
-                            'shift_start': properties.get('Start-start'),
-                            'shift_end': properties.get('Shift-end'),
-                            'store_number': properties.get('Store-number')
-                        })
-                    except ValueError:
-                        continue # Silently ignore shifts with unparsable dates
+        # Parse text directly without CSV intermediate step
+        parsed_entries = parse_schedule_text(extracted_text)
+        
+        if not parsed_entries:
+            error_message = "No valid schedule entries found in the document."
+            return render_template("review_schedule.html", parsed_schedule=[], raw_json=error_message)
 
-        # 2. Sort the list of shifts chronologically
+        # Convert parser output to template format
+        parsed_shifts = []
+        for entry in parsed_entries:
+            try:
+                # Combine month and date to create a proper date
+                year = datetime.date.today().year
+                month = datetime.datetime.strptime(entry['month'], "%b").month
+                day = int(entry['date'])
+                shift_date = datetime.date(year, month, day)
+                
+                # Clean up department name
+                department_name = entry.get('department', '')
+                if department_name.endswith(' Associate'):
+                    department_name = department_name[:-len(' Associate')]
+                
+                parsed_shifts.append({
+                    'shift_date': shift_date,
+                    'department': department_name,
+                    'shift_start': entry.get('shift_start', ''),
+                    'shift_end': entry.get('shift_end', ''),
+                    'store_number': entry.get('store_number', '')
+                })
+            except (ValueError, KeyError) as e:
+                print(f"Skipping invalid entry: {entry}, Error: {e}")
+                continue
+
+        # Sort chronologically
         parsed_shifts.sort(key=lambda x: x['shift_date'])
 
-        # 3. Format the dates and prepare the final list for the template
+        # Format dates for template
         final_output = []
         for shift in parsed_shifts:
             shift_date = shift.pop('shift_date')
@@ -301,9 +389,8 @@ def upload_pdf():
             
     # Keep the key as 'store_number' for consistency with template
 
-        # Prepare data for the HTML template
-        entities_as_dicts = [entity_to_dict(entity) for entity in entities]
-        formatted_json = json.dumps(entities_as_dicts, indent=4)
+        # Prepare data for the HTML template  
+        formatted_json = json.dumps(parsed_entries, indent=4)
 
         # Persist parsed schedule to GCS bucket
         import uuid

@@ -25,7 +25,7 @@ STRIPE_SECRET_KEY="STRIPE_SECRET_KEY"
 MAILGUN_API_SECRET_NAME="workschedule-mailgun-api-key"
 
 # Other config
-STRIPE_PRICE_ID="price_1S5WunIDZ9jjdH6b8iKTMc7r" # test
+STRIPE_PRICE_ID="price_1SBj8dIDZ9jjdH6b696LuHPi" # test
 #STRIPE_PRICE_ID="price_1S3hfCRNuiIIf8E1Xi4p8gLw" # live
 BASE_URL="https://www.myschedule.cloud"
 GCS_BUCKET_NAME="work-schedule-cloud"
