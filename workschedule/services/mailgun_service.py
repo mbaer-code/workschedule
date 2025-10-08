@@ -96,7 +96,7 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
     # Outlook
     outlook_url = "https://outlook.live.com/calendar/0/deeplink/compose"
     
-    subject = "Your Work Schedule - Calendar Import Ready"    # HTML email template matching MySchedule.cloud design
+    subject = "Your Work Schedule - Calendar Import Ready"    # HTML email template matching myschedule.cloud design
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -110,26 +110,31 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
             
             <!-- Header -->
             <div style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); padding: 32px 24px; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">MySchedule.cloud</h1>
-                <p style="color: rgba(255, 255, 255, 0.9); margin: 8px 0 0 0; font-size: 16px;">Your work schedule is ready!</p>
+
+
+
+                <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">
+
+                Hello {customer_name},</p>
+
+                <p style="font-size: 16px; margin: 0 0 24px 0;">
+                Thank you for using myschedule.cloud! Your work schedule has been successfully processed and is attached to this email as an .ics calendar file.
+
+                </p>
+                <p style="font-size: 16px; margin: 0 0 24px 0;">
+                Time to import the .ics file into your calendar program to finish the job.  
+                </p>
+                <p style="font-size: 16px; margin: 0 0 24px 0;">
+                Below are sections on installing .ics files to each popular calendar program and any other email or calendar program out there that supports .ics files.
+                </p>
+                <p style="font-size: 16px; margin: 0 0 24px 0;">
+                The <strong>first step</strong> is to save your .ics file to your device's Downloads folder.
+                </p>
             </div>
-            
-            <!-- Content -->
-            <div style="padding: 32px 24px;">
-                <p style="font-size: 16px; margin: 0 0 24px 0;">Hello {customer_name},</p>
-                
-                <p style="font-size: 16px; margin: 0 0 24px 0;">Thank you for using MySchedule.cloud! Your work schedule has been successfully processed and is attached as a calendar file.</p>
-                
-                <!-- Important First Step -->
-                <div style="margin: 20px 0; padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px;">
-                    <h4 style="margin: 0 0 8px 0; color: #92400e; font-size: 16px; font-weight: 600;">📥 FIRST: Download the ICS file</h4>
-                    <p style="margin: 0 0 8px 0; color: #92400e; font-size: 14px;">Look for "{filename}" attachment in this email (usually at the top or bottom) and save it to your Downloads folder.</p>
-                    <p style="margin: 0; color: #92400e; font-size: 13px; font-style: italic;">📎 The attachment location depends on your email app (Gmail, Outlook, iPhone Mail, etc.)</p>
-                </div>
                 
                 <!-- Calendar Import Sections -->
                 <div style="margin: 32px 0;">
-                    <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0 0 20px 0; text-align: center;">Choose Your Calendar Program for Installation Instructions</h3>
+                    <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0 0 20px 0; text-align: center;">Choose Your Calendar Progrm</h3>
                     
                     <!-- iPhone/Mac Section -->
                     <details style="margin: 16px 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
@@ -205,7 +210,7 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
                         <li>Any calendar app that accepts .ics files</li>
                     </ul>
                     <p style="font-size: 14px; color: #6b7280; margin: 8px 0 0 0;">
-                        Simply open the attached file and your device will ask which calendar to add it to.
+                        Simply open the attached file and your device will ask which calendar to add it to. Then ofcourse, maybe it's time to get a calendar in the cloud.  We recomend Google Calendar.  Its free and easy.
                     </p>
                 </div>
             </div>
@@ -213,7 +218,7 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
             <!-- Footer -->
             <div style="padding: 24px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
                 <p style="font-size: 12px; color: #6b7280; margin: 0;">
-                    © 2025 MySchedule.cloud - Making scheduling simple
+                    © 2025 myschedule.cloud - Making scheduling simple
                 </p>
             </div>
         </div>
@@ -224,9 +229,9 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
     # Plain text version
     text_content = f"""Hello {customer_name},
 
-Thank you for using MySchedule.cloud! Your work schedule has been successfully processed and is attached as a calendar file.
+Thank you for using myschedule.cloud! Your work schedule has been successfully processed and is attached as a calendar file.
 
-FIRST: Download the attached {filename} file to your Downloads folder.
+ Download the attached {filename} file to your Downloads folder.
 
 CHOOSE YOUR CALENDAR PROGRAM FOR INSTALLATION INSTRUCTIONS:
 
@@ -242,8 +247,10 @@ No problem! The attached .ics file works with:
 
 Simply open the attached file and your device will ask which calendar to add it to.
 
+Maybe its time to move to the cloud.  Google Calendar is a good choice.
+
 Best regards,
-MySchedule.cloud Team
+myschedule.cloud Team
 """
     
     # Send email with ICS attachment

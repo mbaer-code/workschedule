@@ -2,19 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Payment Success</title>
+    <title>Thank You</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Payment Successful!</h1>
-        <p>Thank you for your payment.</p>
+        <h1>Thank You</h1>
+        <p></p>
         
         <!-- Email Reminder -->
         <div style="background-color: #e6f3ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 20px 0;">
             <h3 style="color: #0c4a6e; margin: 0 0 8px 0; font-size: 18px;">Check Your Email</h3>
             <p style="color: #0c4a6e; margin: 0; font-size: 14px;">
-                We've sent a detailed email to <strong>{{ user_email }}</strong> with your calendar file and step-by-step import instructions for Google Calendar, iPhone, and Outlook.
+                We've sent a email to <strong>{{ user_email }}</strong> with your calendar file and instructions for importing it to Google Calendar, iPhone, Outlook and most any other calendar program out there.
+            </p>
+            <p style="color: #0c4a6e; margin: 0; font-size: 14px;">
+	    Enjoy!
             </p>
         </div>
         <br><br>

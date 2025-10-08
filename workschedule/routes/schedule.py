@@ -395,7 +395,14 @@ def upload_pdf():
         # Persist parsed schedule to GCS bucket
         import uuid
         job_id = str(uuid.uuid4())
-        schedule_json = json.dumps(final_output)
+        
+        # Include user_email and timezone in the data that gets saved to GCS
+        final_output_with_meta = {
+            "user_email": email,
+            "timezone": timezone,
+            "shifts": final_output
+        }
+        schedule_json = json.dumps(final_output_with_meta)
         bucket_name = os.environ.get('GCS_BUCKET_NAME', 'work-schedule-parsed')
         from google.cloud import storage
         gcs_client = storage.Client()
@@ -468,8 +475,16 @@ def payment_success():
     try:
         schedule_json = blob.download_as_text()
         print(f"[DEBUG] payment_success: downloaded from bucket {bucket_name} parsed_blob {parsed_blob}: {schedule_json}")
-        parsed_schedule = json.loads(schedule_json)
+        parsed_data = json.loads(schedule_json)
+        
+        # Retrieve email and shifts from GCS data
+        user_email = parsed_data.get('user_email')
+        parsed_schedule = parsed_data.get('shifts')
+        if not parsed_schedule or not user_email:
+            return jsonify({"error": "Missing shifts or user_email in GCS data."}), 404
+            
         print(f"[DEBUG] payment_success: parsed_schedule loaded from GCS: {parsed_schedule}")
+        print(f"[DEBUG] payment_success: user_email loaded from GCS: {user_email}")
     except Exception as e:
         return jsonify({"error": f"Error loading schedule from GCS: {e}"}), 404
     # 1. Verify payment (optional, recommended)
@@ -489,7 +504,7 @@ def payment_success():
     magic_link = deliver_ics_file(ics_content)
     
     # Send receipt email with ICS attachment and calendar import buttons
-    user_email = session.get('user_email')
+    # user_email is now retrieved from GCS data above
     customer_name = user_email.split('@')[0] if user_email else "Customer"  # Extract name from email
     
     if user_email and ics_content:
@@ -513,7 +528,8 @@ def payment_success():
         'payment_success.html',
         ics_link=magic_link,
         message="Payment successful. Your schedule is ready.",
-        success=True
+        success=True,
+        user_email=user_email
     )
 
 @schedule_bp.route('/payment_cancel', methods=['GET'])
