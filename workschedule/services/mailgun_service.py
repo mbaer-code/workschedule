@@ -208,15 +208,6 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
                         Simply open the attached file and your device will ask which calendar to add it to.
                     </p>
                 </div>
-                
-                <!-- Support -->
-                <div style="margin: 32px 0 0 0; padding: 20px; background-color: #f9fafb; border-radius: 8px; border-left: 4px solid #0ea5e9;">
-                    <h4 style="font-size: 16px; font-weight: 600; color: #1f2937; margin: 0 0 8px 0;">Need Help?</h4>
-                    <p style="font-size: 14px; color: #6b7280; margin: 0;">
-                        If you have any questions about importing your schedule, please don't hesitate to contact us. 
-                        We're here to help make your scheduling as smooth as possible.
-                    </p>
-                </div>
             </div>
             
             <!-- Footer -->
@@ -250,8 +241,6 @@ No problem! The attached .ics file works with:
 - Any calendar app that accepts .ics files
 
 Simply open the attached file and your device will ask which calendar to add it to.
-
-Need help? Contact us for assistance with importing your schedule.
 
 Best regards,
 MySchedule.cloud Team
