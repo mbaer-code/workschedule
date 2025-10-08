@@ -9,6 +9,8 @@ python-dotenv
 firebase-admin
 google-cloud-documentai
 google-cloud-storage
+opentelemetry-api
+opentelemetry-instrumentation
 icalendar
 requests 
 stripe
@@ -16,4 +18,3 @@ pytest
 pytz
 pdfplumber>=0.9.0
 PyMuPDF
-
