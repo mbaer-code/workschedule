@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 import re
 import fitz  # PyMuPDF for PDF text extraction
 from workschedule.services.stripe_service import create_checkout_session
-from workschedule.services.mailgun_service import send_simple_message
+from workschedule.services.mailgun_service import send_simple_message, send_receipt_with_ics
 
 # Create a Blueprint for schedule-related routes
 schedule_bp = Blueprint('schedule_bp', __name__, url_prefix='/schedule',
@@ -483,9 +483,32 @@ def payment_success():
     # Generate ICS content and deliver via GCS
     from workschedule.services.ics_generator import create_ics_from_entries
     from workschedule.services.ics_delivery import deliver_ics_file
+    # from workschedule.services.mailgun_service import send_receipt_with_ics  # Already imported at top
     calendar_name = "myschedule.cloud"
     ics_content = create_ics_from_entries(parsed_schedule, calendar_name=calendar_name)
     magic_link = deliver_ics_file(ics_content)
+    
+    # Send receipt email with ICS attachment and calendar import buttons
+    user_email = session.get('user_email')
+    customer_name = user_email.split('@')[0] if user_email else "Customer"  # Extract name from email
+    
+    if user_email and ics_content:
+        try:
+            ics_bytes = ics_content.encode('utf-8')
+            email_sent = send_receipt_with_ics(
+                to_email=user_email,
+                customer_name=customer_name,
+                shifts_data=parsed_schedule,
+                ics_content=ics_bytes
+            )
+            if email_sent:
+                print(f"[DEBUG] Receipt email sent successfully to {user_email}")
+            else:
+                print(f"[DEBUG] Failed to send receipt email to {user_email}")
+        except Exception as e:
+            print(f"[DEBUG] Error sending receipt email: {e}")
+    else:
+        print(f"[DEBUG] Skipping email - user_email: {user_email}, ics_content length: {len(ics_content) if ics_content else 0}")
     return render_template(
         'payment_success.html',
         ics_link=magic_link,

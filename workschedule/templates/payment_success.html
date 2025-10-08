@@ -8,8 +8,15 @@
 <body>
     <div class="container">
         <h1>Payment Successful!</h1>
-        <p>Thank you for your payment. Your schedule has been approved and processed.</p>
-        <p>{{ message }}</p>
+        <p>Thank you for your payment.</p>
+        
+        <!-- Email Reminder -->
+        <div style="background-color: #e6f3ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <h3 style="color: #0c4a6e; margin: 0 0 8px 0; font-size: 18px;">Check Your Email</h3>
+            <p style="color: #0c4a6e; margin: 0; font-size: 14px;">
+                We've sent a detailed email to <strong>{{ user_email }}</strong> with your calendar file and step-by-step import instructions for Google Calendar, iPhone, and Outlook.
+            </p>
+        </div>
         <br><br>
         {% if ics_link %}
         <a href="{{ ics_link }}" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:bg-blue-700 transition-colors duration-300" target="_blank">
