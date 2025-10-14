@@ -93,135 +93,149 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
     # Google Calendar - use mobile web version that bypasses app
     google_url = "https://calendar.google.com/calendar/gp#~calendar"
     
-    # Outlook
-    outlook_url = "https://outlook.live.com/calendar/0/deeplink/compose"
+    # Outlook - main calendar web interface for importing
+    outlook_url = "https://outlook.live.com/calendar/"
     
-    subject = "Your Work Schedule - Calendar Import Ready"    # HTML email template matching myschedule.cloud design
+    subject = "Your Work Schedule - Calendar Import Ready"
+    
+    # HTML email template with improved table-based layout for better email compatibility
     html_content = f"""
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Your Work Schedule</title>
     </head>
-    <body style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #374151; margin: 0; padding: 0; background-color: #f9fafb;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); overflow: hidden;">
-            
-            <!-- Header -->
-            <div style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); padding: 32px 24px; text-align: center;">
+    <body style="font-family: 'Inter', Helvetica, Arial, sans-serif; line-height: 1.6; color: #374151; margin: 0; padding: 0; background-color: #f9fafb;">
 
+        <!-- Outer Table (Ensures full-screen width and centering) -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f9fafb;">
+            <tr>
+                <td align="center" style="padding: 20px 10px;">
 
+                    <!-- Email Container (Fixed max-width, center content) -->
+                    <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); overflow: hidden;">
+                        
+                        <!-- Header -->
+                        <tr>
+                            <td align="center" style="background-color: #0ea5e9; padding: 16px 24px;">
+                                <div style="font-size: 28px; font-weight: bold; color: white;">MySchedule.cloud</div>
+                            </td>
+                        </tr>
+                        
+                        <!-- Main Content Area -->
+                        <tr>
+                            <td style="padding: 24px;">
+                                
+                                <!-- Introduction -->
+                                <h1 style="color: #1f2937; margin: 0 0 20px 0; font-size: 24px; font-weight: 700;">
+                                    Hello {customer_name},
+                                </h1>
 
-                <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">
+                                <p style="font-size: 16px; margin: 0 0 18px 0;">
+                                    Thank you for using MySchedule.cloud! Your work schedule has been successfully processed and is attached to this email as an <strong>.ics calendar file</strong>.
+                                </p>
+                                <p style="font-size: 16px; margin: 0 0 32px 0;">
+                                    Follow the simple steps below to import your schedule into your preferred calendar application.
+                                </p>
+                                
+                                <!-- Calendar Instructions Container - Consolidated Instructions -->
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    
+                                    <!-- ========================================================= -->
+                                    <!-- 1. APPLE (SIMPLE INSTRUCTION) -->
+                                    <!-- ========================================================= -->
+                                    <tr>
+                                        <td style="padding-bottom: 25px;">
+                                            <div style="background-color: #f1f5f9; padding: 15px 20px; border-radius: 8px;">
+                                                <span style="font-weight: 700; font-size: 18px; color: #059669; margin: 0 0 10px 0; display: block;">Apple (iPhone, iPad, Mac Calendar):</span>
+                                                
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>1. Tap or Double-Click:</strong> Open the attached <strong>.ics file</strong> in this email or on your device.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>2. Confirm:</strong> Choose <strong>"Add to Calendar"</strong> or <strong>"Import"</strong> when prompted by the Calendar application.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>3. Select:</strong> Select the calendar you wish to add the events to.</p>
+                                                <p style="font-size: 12px; color: #6b7280; margin-top: 15px;">*This works directly on Apple devices and Mac desktop apps.*</p>
+                                            </div>
+                                        </td>
+                                    </tr>
 
-                Hello {customer_name},</p>
+                                    <!-- ========================================================= -->
+                                    <!-- 2. GOOGLE CALENDAR (WEB-FOCUSED STEPS) -->
+                                    <!-- ========================================================= -->
+                                    <tr>
+                                        <td style="padding-bottom: 25px;">
+                                            <div style="background-color: #f1f5f9; padding: 15px 20px; border-radius: 8px;">
+                                                <span style="font-weight: 700; font-size: 18px; color: #1e40af; margin: 0 0 10px 0; display: block;">Google Calendar (Web):</span>
+                                                
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>1. Save File:</strong> Save the attached <strong>.ics file</strong> to your Downloads folder.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>2. Open Calendar:</strong> Click the button below to go to the Google Calendar website.</p>
+                                                
+                                                <div style="margin: 15px 0; text-align: center;">
+                                                    <a href="{google_url}" target="_blank" style="display: inline-block; background-color: white; color: #0ea5e9; border: 1px solid #0ea5e9; padding: 9px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">Open Google Calendar Website</a>
+                                                </div>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>3. Switch View:</strong> Click the <strong>Desktop</strong> link at the bottom of the page.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>4. Go to Import:</strong> Click the <strong>Gear icon</strong> → <strong>Settings</strong> → <strong>Import & Export</strong> on the left menu.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>5. Select Files:</strong> Select the <strong>.ics file</strong> you saved, and choose <strong>MySchedule.cloud</strong> (or your default) from the calendar dropdown.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>6. Final Import:</strong> Click the blue <strong>Import</strong> button. A bubble should appear reading <strong>"Imported [num] out of [num] Events"</strong> (or similar) when done.</p>
+                                                <p style="font-size: 12px; color: #6b7280; margin-top: 15px;">*You must use the Google Calendar website for file importing, even on a phone.*</p>
+                                            </div>
+                                        </td>
+                                    </tr>
 
-                <p style="font-size: 16px; margin: 0 0 24px 0;">
-                Thank you for using myschedule.cloud! Your work schedule has been successfully processed and is attached to this email as an .ics calendar file.
+                                    <!-- ========================================================= -->
+                                    <!-- 3. OUTLOOK (WEB-FOCUSED STEPS - SIMPLIFIED) -->
+                                    <!-- ========================================================= -->
+                                    <tr>
+                                        <td style="padding-bottom: 30px;">
+                                            <div style="background-color: #f1f5f9; padding: 15px 20px; border-radius: 8px;">
+                                                <span style="font-weight: 700; font-size: 18px; color: #1e40af; margin: 0 0 10px 0; display: block;">Outlook Calendar (Web):</span>
 
-                </p>
-                <p style="font-size: 16px; margin: 0 0 24px 0;">
-                Time to import the .ics file into your calendar program to finish the job.  
-                </p>
-                <p style="font-size: 16px; margin: 0 0 24px 0;">
-                Below are sections on installing .ics files to each popular calendar program and any other email or calendar program out there that supports .ics files.
-                </p>
-                <p style="font-size: 16px; margin: 0 0 24px 0;">
-                The <strong>first step</strong> is to save your .ics file to your device's Downloads folder.
-                </p>
-            </div>
-                
-                <!-- Calendar Import Sections -->
-                <div style="margin: 32px 0;">
-                    <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0 0 20px 0; text-align: center;">Choose Your Calendar Progrm</h3>
-                    
-                    <!-- iPhone/Mac Section -->
-                    <details style="margin: 16px 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
-                        <summary style="padding: 16px; cursor: pointer; font-weight: 600; color: #1f2937; font-size: 16px;">
-                            📱 iPhone/Mac Calendar - Click to expand
-                        </summary>
-                        <div style="padding: 0 16px 16px 16px; color: #374151;">
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 1:</strong> Tap the attached .ics file in this email</p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 2:</strong> Choose "Add to Calendar" or "Import"</p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 3:</strong> Select which calendar to add it to</p>
-                            <p style="margin: 8px 0; font-size: 12px; color: #6b7280;">✅ Works directly with iPhone Calendar and Mac Calendar apps</p>
-                        </div>
-                    </details>
-                    
-                    <!-- Google Calendar Section -->
-                    <details style="margin: 16px 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
-                        <summary style="padding: 16px; cursor: pointer; font-weight: 600; color: #1f2937; font-size: 16px;">
-                            📅 Google Calendar - Click to expand
-                        </summary>
-                        <div style="padding: 0 16px 16px 16px; color: #374151;">
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 1:</strong> Open Google Calendar in browser</p>
-                            <div style="margin: 12px 0; text-align: center;">
-                                <a href="https://calendar.google.com/calendar/gp#~calendar" style="display: inline-block; background-color: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 500; font-size: 14px;">Open Google Calendar</a>
-                            </div>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 2:</strong> At the bottom of the screen hit <strong>Desktop</strong></p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 3:</strong> Gear icon ⚙️ → <strong>Settings</strong></p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 4:</strong> Scroll down to <strong>Import & Export</strong></p>
-                            
-                            <div style="margin: 12px 0; padding: 12px; background-color: #f0f9ff; border-radius: 6px; border-left: 3px solid #0ea5e9;">
-                                <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: #0c4a6e;">📅 Don't have a "myschedule.cloud" calendar?</p>
-                                <p style="margin: 0; font-size: 13px; color: #0c4a6e;">Create one first: In the desktop calendar, click "+ Create a calendar" on the left sidebar, name it "myschedule.cloud"</p>
-                            </div>
-                            
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 5:</strong> Under Import select the .ics file</p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 6:</strong> Add to calendar: <strong>myschedule.cloud</strong></p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 7:</strong> Hit <strong>IMPORT</strong> button</p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Step 8:</strong> You should see a bubble that reads <strong>"Imported 10 out of 10 Events"</strong> (or some other numbers)</p>
-                            <p style="margin: 8px 0; font-size: 14px; color: #059669; font-weight: 600;"><strong>Step 9:</strong> Done! ✅</p>
-                            <p style="margin: 8px 0; font-size: 12px; color: #6b7280;">💡 Must use web browser, not Google Calendar app on mobile</p>
-                        </div>
-                    </details>
-                    
-                    <!-- Outlook Section -->
-                    <details style="margin: 16px 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
-                        <summary style="padding: 16px; cursor: pointer; font-weight: 600; color: #1f2937; font-size: 16px;">
-                            📧 Outlook Calendar - Click to expand
-                        </summary>
-                        <div style="padding: 0 16px 16px 16px; color: #374151;">
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Desktop:</strong> File → Open & Export → Import/Export</p>
-                            <p style="margin: 8px 0; font-size: 14px;"><strong>Web/Mobile:</strong> Open Outlook Calendar in browser</p>
-                            <div style="margin: 12px 0; text-align: center;">
-                                <a href="{outlook_url}" style="display: inline-block; background-color: #0ea5e9; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-size: 13px;">Open Outlook Calendar</a>
-                            </div>
-                            <p style="margin: 8px 0; font-size: 14px;">Then: Settings → Import Calendar → Choose .ics file</p>
-                            <p style="margin: 8px 0; font-size: 12px; color: #6b7280;">✅ Works with Outlook.com, Outlook app, and desktop Outlook</p>
-                        </div>
-                    </details>
-                    
-                    <p style="font-size: 14px; color: #6b7280; margin: 20px 0 0 0; text-align: center;">
-                        <strong>💡 Tip:</strong> Click any section above for detailed step-by-step instructions
-                    </p>
-                </div>
-                
-                <!-- No Cloud Calendar Help -->
-                <div style="margin: 32px 0; padding: 20px; background-color: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9;">
-                    <h4 style="font-size: 16px; font-weight: 600; color: #1f2937; margin: 0 0 8px 0;">Don't have a cloud calendar?</h4>
-                    <p style="font-size: 14px; color: #374151; margin: 0 0 8px 0;">
-                        No problem! You can still use the attached .ics file with:
-                    </p>
-                    <ul style="font-size: 14px; color: #374151; margin: 0; padding-left: 20px;">
-                        <li>Your phone's built-in calendar app (iPhone Calendar, Android Calendar)</li>
-                        <li>Desktop calendar programs (Outlook, Thunderbird, Apple Calendar)</li>
-                        <li>Any calendar app that accepts .ics files</li>
-                    </ul>
-                    <p style="font-size: 14px; color: #6b7280; margin: 8px 0 0 0;">
-                        Simply open the attached file and your device will ask which calendar to add it to. Then ofcourse, maybe it's time to get a calendar in the cloud.  We recomend Google Calendar.  Its free and easy.
-                    </p>
-                </div>
-            </div>
-            
-            <!-- Footer -->
-            <div style="padding: 24px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
-                <p style="font-size: 12px; color: #6b7280; margin: 0;">
-                    © 2025 myschedule.cloud - Making scheduling simple
-                </p>
-            </div>
-        </div>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>1. Save File:</strong> Save the attached <strong>.ics file</strong> to your device.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>2. Open Calendar:</strong> Click the button below to go to the Outlook Calendar website.</p>
+                                                
+                                                <div style="margin: 15px 0; text-align: center;">
+                                                    <a href="{outlook_url}" target="_blank" style="display: inline-block; background-color: white; color: #0ea5e9; border: 1px solid #0ea5e9; padding: 9px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">Open Outlook Calendar Website</a>
+                                                </div>
+
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>3. Go to Import:</strong> In Outlook, click <strong>Add calendar</strong> (on the left menu).</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>4. Upload File:</strong> Select <strong>Upload from file</strong> and choose the <strong>.ics file</strong> you saved.</p>
+                                                <p style="font-size: 15px; margin: 8px 0;"><strong>5. Final Import:</strong> Select a calendar (e.g., your primary calendar) and click <strong>Import</strong>.</p>
+                                                
+                                                <p style="font-size: 12px; color: #6b7280; margin-top: 15px;">*This web method is the best approach for both desktop and mobile users.*</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                </table>
+
+                                <!-- Alternative/Offline Calendar Help -->
+                                <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                                    <h4 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 12px 0;">
+                                        Alternative Calendar Support
+                                    </h4>
+                                    <p style="font-size: 14px; color: #374151; margin: 0 0 12px 0;">
+                                        The attached file is a universal <strong>.ics file</strong> and is compatible with virtually all calendar applications (e.g., Thunderbird, eM Client, etc.).
+                                    </p>
+                                    <p style="font-size: 14px; color: #374151; margin: 0;">
+                                        <strong>General Tip:</strong> Simply open or tap the attached <strong>.ics file</strong> and your device will automatically prompt you to add the events to your local calendar.
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Footer -->
+                        <tr>
+                            <td align="center" style="padding: 24px; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                                <p style="font-size: 12px; color: #6b7280; margin: 0;">
+                                    &copy; 2025 MySchedule.cloud - Making scheduling simple
+                                </p>
+                            </td>
+                        </tr>
+
+                    </table>
+                </td>
+            </tr>
+        </table>
     </body>
     </html>
     """
