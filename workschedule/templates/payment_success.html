@@ -2,32 +2,56 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Thank You</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Calendar File is Ready</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div class="container">
-        <h1>Thank You</h1>
-        <p></p>
-        
-        <!-- Email Reminder -->
-        <div style="background-color: #e6f3ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 20px 0;">
-            <h3 style="color: #0c4a6e; margin: 0 0 8px 0; font-size: 18px;">Check Your Email</h3>
-            <p style="color: #0c4a6e; margin: 0; font-size: 14px;">
-                We've sent a email to <strong>{{ user_email }}</strong> with your calendar file and instructions for importing it to Google Calendar, iPhone, Outlook and most any other calendar program out there.
-            </p>
-            <p style="color: #0c4a6e; margin: 0; font-size: 14px;">
-	    Enjoy!
-            </p>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center font-sans">
+    <div class="bg-white p-10 rounded-2xl shadow-lg w-full max-w-md text-center">
+
+        <!-- Success checkmark -->
+        <div class="flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mx-auto mb-6">
+            <svg class="h-10 w-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                    d="M5 13l4 4L19 7"/>
+            </svg>
         </div>
-        <br><br>
+
+        <h1 class="text-2xl font-bold text-gray-800 mb-1">Your calendar file is ready</h1>
+        <p class="text-gray-400 text-sm mb-8">Click below to download your schedule as a <code class="bg-gray-100 px-1 rounded">.ics</code> file.</p>
+
         {% if ics_link %}
-        <a href="{{ ics_link }}" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:bg-blue-700 transition-colors duration-300" target="_blank">
+
+        <!-- Download button -->
+        <a href="{{ ics_link }}"
+            class="group flex items-center justify-center gap-3 w-full bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-bold py-4 px-6 rounded-xl shadow-md transition-all duration-200 text-lg mb-4">
+            <svg class="h-6 w-6 group-hover:translate-y-0.5 transition-transform duration-200"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                    d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/>
+            </svg>
             Download Calendar (.ics)
         </a>
-        <br><br>
+
+        <!-- Expiry warning -->
+        <p class="text-xs text-amber-600 flex items-center justify-center gap-1">
+            <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            This link expires in 1 hour &mdash; download now
+        </p>
+
+        {% else %}
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 text-sm">
+            <p class="font-semibold">Something went wrong generating your download link.</p>
+            <p class="mt-1">Please contact support or try again.</p>
+        </div>
         {% endif %}
-        <a href="/">Return to Dashboard</a>
+
+        <div class="mt-8 pt-6 border-t border-gray-100">
+            <a href="/" class="text-sm text-gray-400 hover:text-sky-600 transition-colors duration-200">&#8592; Back to Home</a>
+        </div>
     </div>
 </body>
 </html>

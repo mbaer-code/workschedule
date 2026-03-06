@@ -1,2 +1,8 @@
-# workschedule
-cloud based project to add web app schedule information to cloud-based calendars
+
+
+Simple startup for the local build and test env.
+
+
+source venv/activeate
+
+source bin/start_server
