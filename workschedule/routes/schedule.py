@@ -6,6 +6,7 @@ import hashlib
 import time
 import re
 import uuid
+import logging
 
 import fitz  # PyMuPDF
 import stripe
@@ -14,6 +15,10 @@ from flask import (Blueprint, render_template, request, redirect,
 from werkzeug.utils import secure_filename
 
 from workschedule.services.stripe_service import create_checkout_session
+from workschedule.services.security import check_upload, check_text, SecurityError
+from workschedule.services.pdf_parser import parse_document, get_document_summary
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Blueprint
@@ -41,7 +46,6 @@ def _make_token(job_id: str) -> str:
         payload.encode(),
         hashlib.sha256
     ).hexdigest()
-    # URL-safe: base64 would be cleaner but hex is fine for short tokens
     import base64
     token = base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).decode()
     return token
@@ -60,11 +64,9 @@ def _verify_token(token: str):
     except Exception:
         raise ValueError("Invalid token format.")
 
-    # Check expiry first
     if time.time() > expires_at:
         raise ValueError("Token has expired.")
 
-    # Verify signature
     payload = f"{job_id}:{expires_at_str}"
     expected_sig = hmac.new(
         MAGIC_LINK_SECRET.encode(),
@@ -94,7 +96,7 @@ def _upload_to_gcs(data: str, blob_path: str):
     bucket = client.bucket(_bucket_name())
     blob = bucket.blob(blob_path)
     blob.upload_from_string(data, content_type='application/json')
-    print(f"[DEBUG] GCS upload: gs://{_bucket_name()}/{blob_path}")
+    logger.debug(f"GCS upload: gs://{_bucket_name()}/{blob_path}")
 
 
 def _download_from_gcs(blob_path: str) -> str:
@@ -110,13 +112,13 @@ def _delete_from_gcs(blob_path: str):
         bucket = client.bucket(_bucket_name())
         blob = bucket.blob(blob_path)
         blob.delete()
-        print(f"[DEBUG] GCS delete: gs://{_bucket_name()}/{blob_path}")
+        logger.debug(f"GCS delete: gs://{_bucket_name()}/{blob_path}")
     except Exception as e:
-        print(f"[DEBUG] GCS delete failed for {blob_path}: {e}")
+        logger.warning(f"GCS delete failed for {blob_path}: {e}")
 
 
 # ---------------------------------------------------------------------------
-# PDF parsing helpers  (unchanged logic, just tidied)
+# PDF text extraction
 # ---------------------------------------------------------------------------
 def extract_text_from_pdf(pdf_contents: bytes) -> str:
     try:
@@ -125,58 +127,8 @@ def extract_text_from_pdf(pdf_contents: bytes) -> str:
         doc.close()
         return text
     except Exception as e:
-        print(f"Error extracting text from PDF: {e}")
+        logger.error(f"Error extracting text from PDF: {e}")
         return ""
-
-
-def parse_schedule_text(text: str) -> list:
-    print("=== EXTRACTED TEXT ===")
-    print(text[:500] + "..." if len(text) > 500 else text)
-    print("=== END EXTRACTED TEXT ===")
-
-    results = []
-    if "not assigned" in text.lower() or "not scheduled" in text.lower():
-        return results
-
-    full_shift_pattern = re.compile(
-        r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})'
-        r'\s+(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)'
-        r'\s*\[[\d:]+\]\s*(\d{4})\s*-\s*Store\s+(\d{3})',
-        re.IGNORECASE
-    )
-    full_shifts = full_shift_pattern.findall(text)
-
-    if full_shifts:
-        print(f"Found {len(full_shifts)} shifts with full store/dept info: {full_shifts}")
-        for month, date, start_time, end_time, dept_code, store_code in full_shifts:
-            results.append({
-                'username': '', 'store_number': f"#{dept_code}", 'weekday': '',
-                'month': month, 'date': date,
-                'shift_start': start_time, 'meal_start': '', 'meal_end': '',
-                'shift_end': end_time, 'department': store_code
-            })
-    else:
-        shift_pattern = re.compile(
-            r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})'
-            r'\s+(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)',
-            re.IGNORECASE
-        )
-        shifts = shift_pattern.findall(text)
-        store_match = re.search(r'(\d{4})\s*-\s*Store', text)
-        dept_match = re.search(r'Store\s+(\d{3})', text)
-        default_store = f"#{store_match.group(1)}" if store_match else ''
-        default_dept = dept_match.group(1) if dept_match else ''
-        print(f"Found {len(shifts)} shifts (fallback), store={default_store}, dept={default_dept}")
-        for month, date, start_time, end_time in shifts:
-            results.append({
-                'username': '', 'store_number': default_store, 'weekday': '',
-                'month': month, 'date': date,
-                'shift_start': start_time, 'meal_start': '', 'meal_end': '',
-                'shift_end': end_time, 'department': default_dept
-            })
-
-    print(f"Parsed {len(results)} total shifts")
-    return results
 
 
 # ---------------------------------------------------------------------------
@@ -199,71 +151,68 @@ def upload_pdf():
     if not pdf_file or pdf_file.filename == '':
         return render_template("upload_schedule_new.html",
                                pdf_error="Please select a PDF file.")
-    if not pdf_file.filename.lower().endswith('.pdf'):
-        return render_template("upload_schedule_new.html",
-                               pdf_error="Only PDF files are accepted.")
 
     try:
         pdf_contents = pdf_file.read()
     except Exception as e:
-        print(f"Error reading file: {e}")
+        logger.error(f"Error reading uploaded file: {e}")
         return redirect(url_for('schedule_bp.upload_schedule'))
 
+    # --- Security gate (fast, free, runs before any API call) ---
     try:
-        extracted_text = extract_text_from_pdf(pdf_contents)
-        if not extracted_text or len(extracted_text.strip()) < 50:
-            return render_template("review_schedule.html", parsed_schedule=[],
-                                   raw_json="No schedule data found or document could not be processed.")
+        check_upload(
+            file_bytes=pdf_contents,
+            filename=secure_filename(pdf_file.filename),
+            mimetype=pdf_file.content_type,
+            ip_address=request.remote_addr,
+            session_id=session.get('user_id') or request.remote_addr,
+        )
+    except SecurityError as e:
+        logger.warning(f"[upload_pdf] Security check failed: {e}")
+        return render_template("upload_schedule_new.html", pdf_error=str(e))
 
-        parsed_entries = parse_schedule_text(extracted_text)
+    try:
+        # Extract text from PDF
+        extracted_text = extract_text_from_pdf(pdf_contents)
+
+        # Text-level security check + truncation if needed
+        try:
+            safe_text = check_text(extracted_text)
+        except SecurityError as e:
+            return render_template("review_schedule.html", parsed_schedule=[],
+                                   raw_json=str(e))
+
+        # Get document summary for user-facing confirmation
+        doc_summary = get_document_summary(safe_text)
+        logger.info(f"[upload_pdf] Document detected: {doc_summary}")
+
+        # AI parser
+        parsed_entries = parse_document(safe_text)
+
         if not parsed_entries:
             return render_template("review_schedule.html", parsed_schedule=[],
-                                   raw_json="No valid schedule entries found in the document.")
+                                   doc_summary=doc_summary,
+                                   raw_json="No calendar events found in this document.")
 
-        # Build display-ready shifts
-        parsed_shifts = []
-        for entry in parsed_entries:
-            try:
-                year = datetime.date.today().year
-                month = datetime.datetime.strptime(entry['month'], "%b").month
-                day = int(entry['date'])
-                shift_date = datetime.date(year, month, day)
-                dept = entry.get('department', '')
-                if dept.endswith(' Associate'):
-                    dept = dept[:-len(' Associate')]
-                parsed_shifts.append({
-                    'shift_date': shift_date,
-                    'department': dept,
-                    'shift_start': entry.get('shift_start', ''),
-                    'shift_end': entry.get('shift_end', ''),
-                    'store_number': entry.get('store_number', '')
-                })
-            except (ValueError, KeyError) as e:
-                print(f"Skipping invalid entry {entry}: {e}")
-                continue
+        # Sort by date
+        parsed_entries.sort(key=lambda x: x.get('shift_date', ''))
 
-        parsed_shifts.sort(key=lambda x: x['shift_date'])
-        final_output = []
-        for shift in parsed_shifts:
-            sd = shift.pop('shift_date')
-            final_output.append({'shift_date': sd.strftime('%a, %b %d'), **shift})
-
-        # Persist to GCS (timezone included, no email)
+        # Persist to GCS
         job_id = str(uuid.uuid4())
         payload = {
             "timezone": timezone,
-            "shifts": final_output
+            "shifts": parsed_entries
         }
         _upload_to_gcs(json.dumps(payload), f"parsed/{job_id}.json")
-
         session['job_id'] = job_id
 
         return render_template('review_schedule.html',
-                               parsed_schedule=final_output,
+                               parsed_schedule=parsed_entries,
+                               doc_summary=doc_summary,
                                job_id=job_id)
 
     except Exception as e:
-        print(f"Parsing error: {e}")
+        logger.error(f"[upload_pdf] Unexpected error: {e}", exc_info=True)
         job_id = locals().get('job_id') or session.get('job_id')
         return render_template("review_schedule.html",
                                parsed_schedule=[], raw_json=str(e), job_id=job_id)
@@ -271,7 +220,7 @@ def upload_pdf():
 
 @schedule_bp.route('/approve_schedule', methods=['POST'])
 def approve_schedule():
-    print(f"[DEBUG] approve_schedule: form={request.form}")
+    logger.debug(f"approve_schedule: form={request.form}")
     job_id = request.form.get('job_id') or request.args.get('job_id')
     if not job_id:
         return render_template("review_schedule.html", parsed_schedule=[],
@@ -291,7 +240,7 @@ def approve_schedule():
 
     stripe_session = create_checkout_session(
         price_id,
-        customer_email=None,   # no email required anymore
+        customer_email=None,
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={'job_id': job_id}
@@ -301,7 +250,7 @@ def approve_schedule():
         return render_template("review_schedule.html", parsed_schedule=[],
                                raw_json="Stripe session could not be created. Please try again.")
 
-    print(f"[approve_schedule] Redirecting to Stripe: {stripe_session.url}")
+    logger.info(f"[approve_schedule] Redirecting to Stripe: {stripe_session.url}")
     return redirect(stripe_session.url)
 
 
@@ -321,7 +270,7 @@ def payment_success():
         if not parsed_schedule:
             return render_template('link_expired.html'), 410
     except Exception as e:
-        print(f"[payment_success] GCS error: {e}")
+        logger.error(f"[payment_success] GCS error: {e}")
         return render_template('link_expired.html'), 410
 
     # Generate ICS
@@ -341,7 +290,7 @@ def payment_success():
     # Delete the parsed JSON — no longer needed
     _delete_from_gcs(blob_path)
 
-    # Build magic link token (points to our /download route)
+    # Build magic link token
     token = _make_token(job_id)
     magic_link = f"{BASE_URL}/schedule/download/{token}"
 
@@ -357,7 +306,7 @@ def download_ics(token):
     try:
         job_id = _verify_token(token)
     except ValueError as e:
-        print(f"[download_ics] Token invalid: {e}")
+        logger.warning(f"[download_ics] Token invalid: {e}")
         return render_template('link_expired.html'), 410
 
     ics_blob_path = f"ics/{job_id}.ics"
@@ -367,7 +316,7 @@ def download_ics(token):
         blob = bucket.blob(ics_blob_path)
         ics_content = blob.download_as_bytes()
     except Exception as e:
-        print(f"[download_ics] GCS error: {e}")
+        logger.error(f"[download_ics] GCS error: {e}")
         return render_template('link_expired.html'), 410
 
     # Delete from GCS after serving
@@ -388,15 +337,13 @@ def stripe_webhook():
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except (ValueError, stripe.error.SignatureVerificationError) as e:
-        print(f"Stripe webhook error: {e}")
+        logger.error(f"Stripe webhook error: {e}")
         return abort(400)
 
     if event['type'] == 'checkout.session.completed':
         stripe_session = event['data']['object']
         job_id = stripe_session.get('metadata', {}).get('job_id')
-        print(f"[stripe_webhook] Payment completed for job_id={job_id}")
-        # ICS generation happens in payment_success route via redirect;
-        # webhook is available here for future server-side fulfillment if needed.
+        logger.info(f"[stripe_webhook] Payment completed for job_id={job_id}")
 
     return '', 200
 
