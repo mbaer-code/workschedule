@@ -15,11 +15,7 @@ echo "----------------------------------------"
 BASE_URL="https://myschedule.cloud"
 GCS_BUCKET_NAME="work-schedule-cloud"
 
-# Document AI and pdf processing
 GOOGLE_CLOUD_PROJECT_ID="work-schedule-cloud"
-GOOGLE_APPLICATION_CREDENTIALS="/instance/service-account.json"
-DOCUMENT_AI_LOCATION="us"
-DOCUMENT_AI_PROCESSOR_ID="fe0baaa28beedbe9"
 
 # --- Input Argument for environment (test or live) ---
 ENV=$1
@@ -49,15 +45,13 @@ gcloud run deploy "${CLOUD_RUN_SERVICE_NAME}" \
   --region "${GCP_REGION}" \
   --allow-unauthenticated \
   --set-env-vars "GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}, \
-                  GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}, \
-                  DOCUMENT_AI_LOCATION=${DOCUMENT_AI_LOCATION}, \
-                  DOCUMENT_AI_PROCESSOR_ID=${DOCUMENT_AI_PROCESSOR_ID}, \
                   BASE_URL=${BASE_URL}, \
                   GCS_BUCKET_NAME=${GCS_BUCKET_NAME}" \
   --set-secrets "STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY_NAME}:latest, \
                  STRIPE_PRICE_ID=${STRIPE_PRICE_ID_NAME}:latest, \
                  STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY_NAME}:latest, \
-                 MAGIC_LINK_SECRET=magic-link-secret:latest"
+                 MAGIC_LINK_SECRET=magic-link-secret:latest, \
+                 ANTHROPIC_API_KEY=anthropic-api-key:latest"
 
 if [ $? -ne 0 ]; then
     echo "Cloud Run deployment failed!"

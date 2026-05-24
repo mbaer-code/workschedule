@@ -1,5 +1,4 @@
 Flask
-Flask-Migrate
 gunicorn
 python-dotenv
 firebase-admin
