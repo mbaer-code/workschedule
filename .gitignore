@@ -3,6 +3,7 @@ __pycache__/
 /venv
 ./.venv
 *.venv
+./integration_tmp
 *.pyc
 *.pyo
 *.pyd

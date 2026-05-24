@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 
 from workschedule.services.stripe_service import create_checkout_session
 from workschedule.services.security import check_upload, check_text, SecurityError
-from workschedule.services.pdf_parser import parse_document, get_document_summary
+from workschedule.services.pdf_parser import parse_document_with_summary
 
 logger = logging.getLogger(__name__)
 
@@ -182,12 +182,9 @@ def upload_pdf():
             return render_template("review_schedule.html", parsed_schedule=[],
                                    raw_json=str(e))
 
-        # Get document summary for user-facing confirmation
-        doc_summary = get_document_summary(safe_text)
+        # Parse document — single call returns both events and summary (2 API calls)
+        parsed_entries, doc_summary = parse_document_with_summary(safe_text)
         logger.info(f"[upload_pdf] Document detected: {doc_summary}")
-
-        # AI parser
-        parsed_entries = parse_document(safe_text)
 
         if not parsed_entries:
             return render_template("review_schedule.html", parsed_schedule=[],

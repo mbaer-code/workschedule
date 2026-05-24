@@ -216,50 +216,57 @@ def _validate_events(events: list, context: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Internal summary formatter (no API call)
 # ---------------------------------------------------------------------------
-def parse_document(text: str) -> list:
-    """
-    Takes raw text extracted from a PDF and returns
-    a list of calendar-ready event dicts.
-
-    Drop-in replacement for parse_schedule_text() in the routes file.
-    """
-    if not text or len(text.strip()) < 20:
-        logger.warning("[pdf_parser] Text too short to parse")
-        return []
-
-    # Pass 1: understand the document
-    context = _get_document_context(text)
-
-    if not context.get("has_calendar_content", True):
-        logger.info("[pdf_parser] Document has no calendar content per context pass")
-        return []
-
-    # Pass 2: extract events
-    events = _extract_events(text, context)
-
-    # Validate
-    validated = _validate_events(events, context)
-
-    logger.info(f"[pdf_parser] Parsed {len(validated)} events from document")
-    return validated
-
-
-# ---------------------------------------------------------------------------
-# Convenience: get document summary for UI display
-# ---------------------------------------------------------------------------
-def get_document_summary(text: str) -> str:
-    """
-    Returns a one-sentence human-readable summary of the document.
-    Useful for showing the user "We detected a work schedule for Home Depot, Store 0660"
-    before they confirm the calendar entries.
-    """
-    context = _get_document_context(text)
+def _format_summary(context: dict) -> str:
+    """Build a human-readable summary string from an already-fetched context dict."""
     summary = context.get("summary", "")
     subject = context.get("subject")
     location = context.get("location")
     extras = ", ".join(filter(None, [subject, location]))
     if extras:
         return f"{summary} ({extras})"
+    return summary
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+def parse_document_with_summary(text: str) -> tuple:
+    """
+    Single entry point: runs Pass 1 once, then Pass 2.
+    Returns (events: list, summary: str) — 2 API calls total.
+
+    Preferred over calling parse_document() + get_document_summary() separately
+    which would make 3 API calls.
+    """
+    if not text or len(text.strip()) < 20:
+        logger.warning("[pdf_parser] Text too short to parse")
+        return [], ""
+
+    # Pass 1: understand the document
+    context = _get_document_context(text)
+    summary = _format_summary(context)
+
+    if not context.get("has_calendar_content", True):
+        logger.info("[pdf_parser] Document has no calendar content per context pass")
+        return [], summary
+
+    # Pass 2: extract events
+    events = _extract_events(text, context)
+    validated = _validate_events(events, context)
+
+    logger.info(f"[pdf_parser] Parsed {len(validated)} events from document")
+    return validated, summary
+
+
+def parse_document(text: str) -> list:
+    """Backward-compatible wrapper — use parse_document_with_summary() in new code."""
+    events, _ = parse_document_with_summary(text)
+    return events
+
+
+def get_document_summary(text: str) -> str:
+    """Backward-compatible wrapper — use parse_document_with_summary() in new code."""
+    _, summary = parse_document_with_summary(text)
     return summary
