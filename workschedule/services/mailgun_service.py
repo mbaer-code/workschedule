@@ -30,7 +30,7 @@ def send_simple_message(to_email, subject, text_content, html_content=None, atta
     api_url = f"https://api.mailgun.net/v3/{mailgun_domain}/messages"
     sys.stderr.write(f"[Mailgun] API URL: {api_url}\n")
     data = {
-            "from": f"myschedule.cloud:  <mailgun@{mailgun_domain}>",
+        "from": f"Schedule to ICS <mailgun@{mailgun_domain}>",
         "to": to_email,
         "subject": subject,
         "text": text_content
@@ -96,7 +96,7 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
     # Outlook - main calendar web interface for importing
     outlook_url = "https://outlook.live.com/calendar/"
     
-    subject = "Schedule --> Calendar"
+    subject = "Your Work Schedule - Calendar Import Ready"
     
     # HTML email template with improved table-based layout for better email compatibility
     html_content = f"""
@@ -217,32 +217,8 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
                                         The attached file is a universal <strong>.ics file</strong> and is compatible with virtually all calendar applications (e.g., Thunderbird, eM Client, etc.).
                                     </p>
                                     <p style="font-size: 14px; color: #374151; margin: 0;">
-                                        <strong>General Tip:</strong> Simply open or tap the attached <strong>.ics file</strong> and your device should automatically prompt you to add the events to your local calendar.
+                                        <strong>General Tip:</strong> Simply open or tap the attached <strong>.ics file</strong> and your device will automatically prompt you to add the events to your local calendar.
                                     </p>
-                                </div>
-                                 <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-                                    <h4 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 12px 0;">
-                                       Printing Your Calendar 
-                                    </h4>
-                                    <p style="font-size: 14px; color: #374151; margin: 0 0 12px 0;">
-                                        The trick to printing your calendar, as you know, is to open the calendar program on a desktop computer and print out the screen.  If you don't have a calendar program, below are instructions for getting Google's free Calendar program.
-                                    </p>
-
-                                    <p style="font-size: 14px; color: #374151; margin: 0 0 12px 0;">
-                                    <ol>
-                                        <li>
-                                        <p style="font-size: 14px; color: #374151; margin: 0 0 12px 0;">
-                                            Get a Google Account:</strong> If you use Gmail, you already have one. If not, you will need to <a href="https://accounts.google.com/signup" target="_blank">create a free Google account</a> to use the calendar.
-                                        </p>
-                                        </li>
-                                        <li>
-                                        <p style="font-size: 14px; color: #374151; margin: 0 0 12px 0;">
-                                            Go to Google Calendar:</strong> Visit <a href="https://calendar.google.com" target="_blank">calendar.google.com</a> or open the mobile app, and by following the instructions above for a google calendar, you can import your 'ics' file to add your schedule to your new calendar. Once done, open the calendar and print the screen.
-                                        </p>
-                                        </li>
-                                    </ol>
-                                    </p>
-`
                                 </div>
                             </td>
                         </tr>

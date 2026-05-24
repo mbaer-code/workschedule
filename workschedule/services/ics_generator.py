@@ -273,19 +273,15 @@ def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str
         if shift_duration >= timedelta(hours=5):
             fifth_hour_dt = start_dt + timedelta(hours=5)
             fifth_hour_time = fifth_hour_dt.strftime('%I:%M %p').lstrip('0')  # Format like "6:30 PM"
-            fifth_hour_line = f"Fifth hour: {fifth_hour_time}"
-
+            fifth_hour_line = f"\nfifth hour: {fifth_hour_time}"
         
-        #description_parts = [f"{start_time} - {end_time}", date_obj.strftime('%A, %b %d, %Y')]
-        description_parts = [f"----------------------------------"]
-
+        description_parts = [f"{start_time} - {end_time}", date_obj.strftime('%A, %b %d, %Y')]
+        if entry.get('department'):
+            description_parts.append(f"Dept: {entry['department']}")
+        if entry.get('store_number'):
+            description_parts.append(f"Store: {entry['store_number']}")
         if fifth_hour_line:
             description_parts.append(fifth_hour_line)
-
-        if entry.get('department'):
-            if entry.get('store_number'):
-                description_parts.append(f"Dept: {entry['department']}  Store: {entry['store_number']}")
-
         event.add('description', '\n'.join(description_parts))
         uid_source = f"{date_obj.isoformat()}-{start_time}-{end_time}-{entry.get('department')}-{entry.get('store_number')}"
         uid_hash = hashlib.sha1(uid_source.encode('utf-8')).hexdigest()
