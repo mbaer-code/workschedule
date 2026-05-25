@@ -1,8 +1,7 @@
 
 
 
-
-Ignore common development files and directories
+#Ignore common development files and directories
 .env
 .git/
 .gitignore
@@ -11,7 +10,8 @@ Ignore common development files and directories
 tests/
 *.pyc
 pycache/
+venv/
 
-Explicitly include the service account key, even if other rules would ignore it.
+#Explicitly include the service account key
 !instance/service-account.json
 !/instance/service-account.json

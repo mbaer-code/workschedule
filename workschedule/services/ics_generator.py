@@ -226,7 +226,7 @@ def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str
     print(f"[DEBUG] create_ics_from_entries: received entries={entries}")
     print(f"[DEBUG] create_ics_from_entries: entries count={len(entries)}")
     cal = Calendar()
-    cal.add('prodid', '-//Workforce Schedule//mxm.dk//')
+    cal.add('prodid', '-//myschedule.cloud//Schedule Generator//EN')
     cal.add('version', '2.0')
     cal.add('method', 'PUBLISH')
     cal.add('X-WR-CALNAME', calendar_name)
@@ -260,22 +260,59 @@ def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str
         if end_dt < start_dt:
             end_dt += timedelta(days=1)
         event = Event()
-        event.add('summary', entry.get('department', 'Work Shift'))
+        event.add('summary', 'THD')  # Change title to THD
         event.add('dtstart', start_dt)
         event.add('dtend', end_dt)
         now_utc = datetime.now(timezone.utc)
         event.add('dtstamp', now_utc)
         event.add('last-modified', now_utc)
+        
+        # Calculate fifth hour for long shifts
+        shift_duration = end_dt - start_dt
+        fifth_hour_line = ""
+        if shift_duration >= timedelta(hours=5):
+            fifth_hour_dt = start_dt + timedelta(hours=5)
+            fifth_hour_time = fifth_hour_dt.strftime('%I:%M %p').lstrip('0')  # Format like "6:30 PM"
+            fifth_hour_line = f"\nfifth hour: {fifth_hour_time}"
+        
         description_parts = [f"{start_time} - {end_time}", date_obj.strftime('%A, %b %d, %Y')]
         if entry.get('department'):
-            description_parts.append(entry['department'])
+            description_parts.append(f"Dept: {entry['department']}")
         if entry.get('store_number'):
             description_parts.append(f"Store: {entry['store_number']}")
+        if fifth_hour_line:
+            description_parts.append(fifth_hour_line)
         event.add('description', '\n'.join(description_parts))
         uid_source = f"{date_obj.isoformat()}-{start_time}-{end_time}-{entry.get('department')}-{entry.get('store_number')}"
         uid_hash = hashlib.sha1(uid_source.encode('utf-8')).hexdigest()
         event.add('uid', uid_hash)
         cal.add_component(event)
+
+    # Add reminder event 2 weeks from today
+    if entries:  # Only add reminder if we have schedule entries
+        today = datetime.now()
+        reminder_date = today + timedelta(weeks=2)
+        
+        reminder_event = Event()
+        reminder_event.add('summary', 'Time to update your work schedule')
+        
+        # Make it an all-day event
+        reminder_event.add('dtstart', reminder_date.date())
+        reminder_event.add('dtend', (reminder_date + timedelta(days=1)).date())
+        
+        now_utc = datetime.now(timezone.utc)
+        reminder_event.add('dtstamp', now_utc)
+        reminder_event.add('last-modified', now_utc)
+        
+        reminder_description = "Time to update your work schedule!\n\nVisit: https://myschedule.cloud"
+        reminder_event.add('description', reminder_description)
+        
+        # Create unique UID for reminder based on the date
+        reminder_uid_source = f"reminder-{reminder_date.date().isoformat()}-myschedule.cloud"
+        reminder_uid_hash = hashlib.sha1(reminder_uid_source.encode('utf-8')).hexdigest()
+        reminder_event.add('uid', reminder_uid_hash)
+        
+        cal.add_component(reminder_event)
 
     return cal.to_ical().decode('utf-8')
 
