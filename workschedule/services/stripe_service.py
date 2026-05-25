@@ -1,7 +1,11 @@
-import stripe
+import logging
 import os
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+import stripe
+
+logger = logging.getLogger(__name__)
+
+stripe.api_key = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
 
 
 def create_checkout_session(price_id, customer_email=None, success_url=None,
@@ -23,22 +27,20 @@ def create_checkout_session(price_id, customer_email=None, success_url=None,
             "allow_promotion_codes": True,
         }
 
-        # Only pass customer_email if provided — omitting it means Stripe
-        # won't pre-fill or require it, keeping the flow anonymous.
         if customer_email:
             session_params["customer_email"] = customer_email
 
         if coupon_code:
-            print(f"[DEBUG] Coupon code '{coupon_code}' — enter on Stripe checkout page.")
+            logger.debug(f"Coupon code '{coupon_code}' — enter on Stripe checkout page.")
 
-        print(f"[DEBUG] Creating Stripe session with params: {session_params}")
+        logger.info(f"[stripe] Creating checkout session price_id={price_id}")
         session = stripe.checkout.Session.create(**session_params)
-        print(f"[DEBUG] Stripe session created: {session.id}")
+        logger.info(f"[stripe] Session created id={session.id} url={session.url!r}")
         return session
 
     except stripe.error.StripeError as e:
-        print(f"Stripe error: {e}")
+        logger.error(f"[stripe] StripeError: {e}", exc_info=True)
         return None
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        logger.error(f"[stripe] Unexpected error: {e}", exc_info=True)
         return None

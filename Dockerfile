@@ -19,11 +19,10 @@ COPY . .
 
 COPY instance/service-account.json /instance/service-account.json
 
+# Force unbuffered Python output so print() and logging appear immediately in Cloud Run logs
+ENV PYTHONUNBUFFERED=1
+
 # Define the entrypoint for the container
-# This will simply start your Gunicorn application.
-# Cloud Run's built-in Cloud SQL integration will handle the database connection
-# via a Unix socket, so the proxy is no longer needed in the container.
-# The PORT environment variable is automatically provided by Cloud Run.
 CMD python -m gunicorn --bind 0.0.0.0:${PORT} workschedule.wsgi:app
 
 # Expose the port that the application will listen on
