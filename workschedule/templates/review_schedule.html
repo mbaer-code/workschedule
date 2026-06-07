@@ -17,20 +17,20 @@
                     <thead class="bg-sky-50">
                         <tr>
                             <th class="py-3 px-4 text-left text-sm font-semibold text-sky-700">Date</th>
+                            <th class="py-3 px-4 text-left text-sm font-semibold text-sky-700">Event</th>
                             <th class="py-3 px-4 text-left text-sm font-semibold text-sky-700">Start</th>
                             <th class="py-3 px-4 text-left text-sm font-semibold text-sky-700">End</th>
-                            <th class="py-3 px-4 text-left text-sm font-semibold text-sky-700">Dept</th>
-                            <th class="py-3 px-4 text-left text-sm font-semibold text-sky-700">Store</th>
+                            <th class="py-3 px-4 text-left text-sm font-semibold text-sky-700">Details</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         {% for item in parsed_schedule %}
                         <tr class="hover:bg-gray-50">
                             <td class="py-2 px-4 text-sm">{{ item.get('shift_date', 'N/A') }}</td>
-                            <td class="py-2 px-4 text-sm">{{ item.get('shift_start', 'N/A') }}</td>
-                            <td class="py-2 px-4 text-sm">{{ item.get('shift_end', 'N/A') }}</td>
-                            <td class="py-2 px-4 text-sm">{{ item.get('department', 'N/A') }}</td>
-                            <td class="py-2 px-4 text-sm">{{ item.get('store_number') if item.get('store_number') and item.get('store_number') != 'N/A' else '—' }}</td>
+                            <td class="py-2 px-4 text-sm font-medium">{{ item.get('event_title', '—') }}</td>
+                            <td class="py-2 px-4 text-sm">{{ 'All day' if item.get('all_day') else item.get('shift_start', '—') }}</td>
+                            <td class="py-2 px-4 text-sm">{{ '—' if item.get('all_day') else item.get('shift_end', '—') }}</td>
+                            <td class="py-2 px-4 text-sm text-gray-500">{{ item.get('department', '—') or '—' }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
