@@ -28,6 +28,8 @@ Rules:
 - If the document appears to be a scanned image with no extractable text, \
 return an empty events array and set confidence to "low"
 - Deduplicate: if the same date and event appears more than once, include it only once
+- For academic calendars with "Key Dates" and per-session breakdown sections, extract only from the "Key Dates" sections — skip the redundant per-session deadline breakdowns
+- Cap output at 60 events maximum; if more exist, keep the most student-relevant ones
 - Return ONLY valid JSON, no preamble, no markdown fences
 
 Return this exact structure:
@@ -91,7 +93,7 @@ def parse_pdf_with_claude(pdf_bytes: bytes) -> list:
 
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=4096,
+        max_tokens=8192,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": USER_PROMPT_TEMPLATE.format(
             today=today,
