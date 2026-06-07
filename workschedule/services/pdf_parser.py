@@ -94,7 +94,8 @@ def parse_pdf_with_claude(pdf_bytes: bytes) -> list:
         logger.warning(f"Document too long ({len(text)} chars), exceeds {MAX_INPUT_CHARS} limit")
         raise ValueError(
             "This document is too long to process automatically. "
-            "Try uploading a single page or a shorter section of the document."
+            "For best results, upload a summary page or the section containing key dates. "
+            "If most dates appear near the beginning, try printing just the first few pages to a new PDF and uploading that instead."
         )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
