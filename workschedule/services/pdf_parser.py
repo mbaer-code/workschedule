@@ -2,121 +2,166 @@ import os
 import datetime
 import json
 import logging
-import fitz
+
+import fitz  # PyMuPDF
 import anthropic
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a calendar event extractor. Your job is to read any document and extract every date-based event, shift, deadline, or occurrence into a structured JSON format.
+SYSTEM_PROMPT = """You are a calendar event extractor. Your job is to read any document \
+and extract all dates and events into structured calendar data.
 
-First, classify the document. Then extract all events.
-
-Return a single JSON object with this exact structure:
-{
-  "document_type": "work_schedule | academic_calendar | legal_notice | itinerary | project_plan | meeting_schedule | other",
-  "document_title": "concise title for the document, e.g. 'Home Depot Schedule Sep 8-14' or 'Fall 2024 Syllabus'",
-  "confidence": "high | medium | low",
-  "events": [
-    {
-      "date": "YYYY-MM-DD",
-      "title": "short event name (5 words max)",
-      "start_time": "HH:MM",
-      "end_time": "HH:MM",
-      "all_day": false,
-      "context": "dept, location, or other brief label"
-    }
-  ]
-}
+Classify the document and extract events appropriate to its type:
+- work_schedule: shifts with start/end times
+- syllabus: assignments, exams, class sessions, deadlines
+- legal: deadlines, hearings, response dates
+- project: milestones, deliverables, meetings
+- general: any date-referenced event or deadline
 
 Rules:
-- date: always ISO 8601 format YYYY-MM-DD
-- title: short and specific — e.g. "Work Shift", "Final Exam", "Court Deadline", "Team Meeting"
-- start_time / end_time: 24-hour HH:MM format; omit (or use null) if unknown
-- all_day: true if no specific time, false if timed
-- context: department, store number, course name, location, or any brief label; empty string if none
-- Skip days off, non-events, and purely descriptive text
-- Deduplicate: if the same date and event appears more than once, include it only once
-- For academic calendars with "Key Dates" and per-session breakdown sections, extract only from the "Key Dates" sections
-- Cap output at 60 events maximum
-- Return ONLY valid JSON, no preamble, no markdown fences"""
+- title: short, max 30 characters, what the event IS
+- context: the source document name or organization, used in description
+- For recurring events (e.g. "class meets MWF"), expand into individual events
+- For all-day events with no time, set all_day true and omit times
+- Include person's name in title if multiple people's schedules are present
+- Year ambiguity: assume nearest future occurrence relative to today's date
+- If the document appears to be a scanned image with no extractable text, \
+return an empty events array and set confidence to "low"
+- Return ONLY valid JSON, no preamble, no markdown fences
+
+Return this exact structure:
+{
+  "document_type": "work_schedule|syllabus|legal|project|general",
+  "document_title": "brief descriptive title of the source document",
+  "confidence": "high|medium|low",
+  "events": [
+    {
+      "title": "short event title, 30 chars max",
+      "context": "source document or organization name",
+      "date": "YYYY-MM-DD",
+      "start_time": "HH:MM" or null,
+      "end_time": "HH:MM" or null,
+      "all_day": true or false,
+      "notes": "any useful context" or null
+    }
+  ]
+}"""
 
 USER_PROMPT_TEMPLATE = """Today's date is {today}.
+Use this to resolve relative dates and year ambiguity — \
+assume the nearest future occurrence of any undated event.
 
-Extract all calendar events from the document below.
+Extract all calendar events from this document:
 
 {extracted_text}"""
 
-MAX_INPUT_CHARS = 24_000
-
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    text = "".join(page.get_text() for page in doc)
-    doc.close()
-    return text
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        text = "".join(page.get_text() for page in doc)
+        doc.close()
+        return text
+    except Exception as e:
+        logger.error(f"PDF text extraction failed: {e}")
+        return ""
 
 
 def _fmt_time(t: str) -> str:
+    """Convert 24h 'HH:MM' to 12h 'H:MM AM/PM' as expected by ics_generator."""
     dt = datetime.datetime.strptime(t, "%H:%M")
     hour = dt.hour % 12 or 12
     ampm = "AM" if dt.hour < 12 else "PM"
     return f"{hour}:{dt.strftime('%M')} {ampm}"
 
 
-def parse_pdf_with_claude(pdf_bytes: bytes):
+def parse_pdf_with_claude(pdf_bytes: bytes) -> list:
+    """
+    Extract calendar events from a PDF using Claude Haiku.
+    Returns a list of dicts compatible with create_ics_from_entries.
+    """
     text = extract_text_from_pdf(pdf_bytes)
     if not text or len(text.strip()) < 20:
-        return [], ""
-    if len(text) > MAX_INPUT_CHARS:
-        raise ValueError("This document is too long to process. Please upload a shorter document.")
+        logger.warning("No extractable text in PDF")
+        return []
+
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     today = datetime.date.today().isoformat()
+
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=8192,
+        max_tokens=2000,
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": USER_PROMPT_TEMPLATE.format(today=today, extracted_text=text)}]
+        messages=[{"role": "user", "content": USER_PROMPT_TEMPLATE.format(
+            today=today,
+            extracted_text=text
+        )}]
     )
+
     usage = response.usage
     logger.info(f"Haiku usage: input={usage.input_tokens} output={usage.output_tokens}")
+
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    result = json.loads(raw)
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.error(f"Haiku returned invalid JSON: {e}\nRaw: {raw[:500]}")
+        raise ValueError("AI parser returned an unreadable response. Please try again.")
+
     doc_type = result.get("document_type", "unknown")
     doc_title = result.get("document_title", "")
     confidence = result.get("confidence", "unknown")
     events = result.get("events", [])
+
     logger.info(f"Document: type={doc_type!r} title={doc_title!r} confidence={confidence} events={len(events)}")
+
     entries = []
     for ev in events:
-        date_obj = datetime.date.fromisoformat(ev.get("date"))
-        shift_date = date_obj.strftime("%a, %b %d")
-        all_day = ev.get("all_day", False)
-        start_raw = ev.get("start_time")
-        end_raw = ev.get("end_time")
-        if all_day or not start_raw:
-            shift_start = ""
-            shift_end = ""
-        else:
-            shift_start = _fmt_time(start_raw)
-            shift_end = _fmt_time(end_raw) if end_raw else shift_start
-        if doc_type == "work_schedule":
-            event_title = "Work Shift"
-        else:
-            event_title = ev.get("title", "Event")
-        context = ev.get("context", "")
-        if " - " in context:
-            context = context.split(" - ")[0].strip()
-        if len(context) > 40:
-            context = context[:38].rstrip() + "…"
-        entries.append({
-            "shift_date": shift_date,
-            "shift_start": shift_start,
-            "shift_end": shift_end,
-            "department": context,
-            "store_number": "",
-            "event_title": event_title,
-            "all_day": all_day,
-        })
-    return entries, doc_title
+        try:
+            date_str = ev.get("date")
+            if not date_str:
+                continue
+            date_obj = datetime.date.fromisoformat(date_str)
+            shift_date = date_obj.strftime("%a, %b %d")
+
+            all_day = ev.get("all_day", False)
+            start_raw = ev.get("start_time")
+            end_raw = ev.get("end_time")
+
+            if all_day or not start_raw:
+                shift_start = ""
+                shift_end = ""
+            else:
+                shift_start = _fmt_time(start_raw)
+                shift_end = _fmt_time(end_raw) if end_raw else shift_start
+
+            # For work schedules use a neutral title; other types keep Haiku's title
+            if doc_type == "work_schedule":
+                event_title = "Work Shift"
+            else:
+                event_title = ev.get("title", "Event")
+
+            # Trim context to the first segment before " - " to avoid verbose suffixes
+            context = ev.get("context", "")
+            if " - " in context:
+                context = context.split(" - ")[0].strip()
+            # Cap at 40 chars for display
+            if len(context) > 40:
+                context = context[:38].rstrip() + "…"
+
+            entries.append({
+                "shift_date": shift_date,
+                "shift_start": shift_start,
+                "shift_end": shift_end,
+                "department": context,
+                "store_number": "",
+                "event_title": event_title,
+                "all_day": all_day,
+            })
+        except Exception as e:
+            logger.warning(f"Skipping malformed event {ev}: {e}")
+            continue
+
+    return entries
