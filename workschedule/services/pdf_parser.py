@@ -83,10 +83,19 @@ def parse_pdf_with_claude(pdf_bytes: bytes) -> list:
     Extract calendar events from a PDF using Claude Haiku.
     Returns a list of dicts compatible with create_ics_from_entries.
     """
+    MAX_INPUT_CHARS = 24_000
+
     text = extract_text_from_pdf(pdf_bytes)
     if not text or len(text.strip()) < 20:
         logger.warning("No extractable text in PDF")
         return []
+
+    if len(text) > MAX_INPUT_CHARS:
+        logger.warning(f"Document too long ({len(text)} chars), exceeds {MAX_INPUT_CHARS} limit")
+        raise ValueError(
+            "This document is too long to process automatically. "
+            "Try uploading a single page or a shorter section of the document."
+        )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     today = datetime.date.today().isoformat()
