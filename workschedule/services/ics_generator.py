@@ -249,31 +249,40 @@ def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str
             continue
         start_time = entry.get('shift_start', '')
         end_time = entry.get('shift_end', '')
-        if not start_time or not end_time:
-            print(f"[DEBUG] Missing start or end time for entry: {entry}")
-            continue
-        start_dt = combine_date_time(date_obj, start_time)
-        end_dt = combine_date_time(date_obj, end_time)
-        if tzinfo:
-            start_dt = tzinfo.localize(start_dt)
-            end_dt = tzinfo.localize(end_dt)
-        if end_dt < start_dt:
-            end_dt += timedelta(days=1)
+        all_day = entry.get('all_day', False) or (not start_time and not end_time)
+
         event = Event()
-        event.add('summary', 'THD')  # Change title to THD
-        event.add('dtstart', start_dt)
-        event.add('dtend', end_dt)
+        event.add('summary', entry.get('event_title', 'THD'))
+
+        if all_day:
+            event.add('dtstart', date_obj.date())
+            event.add('dtend', (date_obj + timedelta(days=1)).date())
+        else:
+            if not start_time or not end_time:
+                print(f"[DEBUG] Missing start or end time for entry: {entry}")
+                continue
+            start_dt = combine_date_time(date_obj, start_time)
+            end_dt = combine_date_time(date_obj, end_time)
+            if tzinfo:
+                start_dt = tzinfo.localize(start_dt)
+                end_dt = tzinfo.localize(end_dt)
+            if end_dt < start_dt:
+                end_dt += timedelta(days=1)
+            event.add('dtstart', start_dt)
+            event.add('dtend', end_dt)
         now_utc = datetime.now(timezone.utc)
         event.add('dtstamp', now_utc)
         event.add('last-modified', now_utc)
-        
-        # Calculate fifth hour for long shifts
-        shift_duration = end_dt - start_dt
+
+        # Calculate fifth hour for timed shifts only
         fifth_hour_line = ""
-        if shift_duration >= timedelta(hours=5):
-            fifth_hour_dt = start_dt + timedelta(hours=5)
-            fifth_hour_time = fifth_hour_dt.strftime('%I:%M %p').lstrip('0')  # Format like "6:30 PM"
-            fifth_hour_line = f"\nfifth hour: {fifth_hour_time}"
+        if not all_day:
+            shift_duration = end_dt - start_dt
+            if shift_duration >= timedelta(hours=5):
+                fifth_hour_dt = start_dt + timedelta(hours=5)
+                fifth_hour_time = fifth_hour_dt.strftime('%I:%M %p').lstrip('0')
+                fifth_hour_line = f"Fifth hour: {fifth_hour_time}"
+
         
         description_parts = [f"{start_time} - {end_time}", date_obj.strftime('%A, %b %d, %Y')]
         if entry.get('department'):

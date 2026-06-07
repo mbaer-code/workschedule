@@ -15,8 +15,7 @@ from flask import (Blueprint, render_template, request, redirect,
 from werkzeug.utils import secure_filename
 
 from workschedule.services.stripe_service import create_checkout_session
-from workschedule.services.security import check_upload, check_text, SecurityError
-from workschedule.services.pdf_parser import parse_document_with_summary
+from workschedule.services.pdf_parser import parse_pdf_with_claude
 
 logger = logging.getLogger(__name__)
 
@@ -160,52 +159,26 @@ def upload_pdf():
 
     # --- Security gate (fast, free, runs before any API call) ---
     try:
-        check_upload(
-            file_bytes=pdf_contents,
-            filename=secure_filename(pdf_file.filename),
-            mimetype=pdf_file.content_type,
-            ip_address=request.remote_addr,
-            session_id=session.get('user_id') or request.remote_addr,
-        )
-    except SecurityError as e:
-        logger.warning(f"[upload_pdf] Security check failed: {e}")
-        return render_template("upload_schedule_new.html", pdf_error=str(e))
-
-    try:
-        # Extract text from PDF
-        extracted_text = extract_text_from_pdf(pdf_contents)
-
-        # Text-level security check + truncation if needed
-        try:
-            safe_text = check_text(extracted_text)
-        except SecurityError as e:
+        result = parse_pdf_with_claude(pdf_contents)
+        if not result or not result[0]:
             return render_template("review_schedule.html", parsed_schedule=[],
-                                   raw_json=str(e))
+                                   raw_json="No events found in this document. Please check that it contains dates.")
 
-        # Parse document — single call returns both events and summary (2 API calls)
-        parsed_entries, doc_summary = parse_document_with_summary(safe_text)
-        logger.info(f"[upload_pdf] Document detected: {doc_summary}")
-
-        if not parsed_entries:
-            return render_template("review_schedule.html", parsed_schedule=[],
-                                   doc_summary=doc_summary,
-                                   raw_json="No calendar events found in this document.")
-
-        # Sort by date
-        parsed_entries.sort(key=lambda x: x.get('shift_date', ''))
+        parsed_entries, doc_title = result
 
         # Persist to GCS
         job_id = str(uuid.uuid4())
         payload = {
             "timezone": timezone,
-            "shifts": parsed_entries
+            "shifts": parsed_entries,
+            "doc_title": doc_title,
         }
         _upload_to_gcs(json.dumps(payload), f"parsed/{job_id}.json")
         session['job_id'] = job_id
 
         return render_template('review_schedule.html',
                                parsed_schedule=parsed_entries,
-                               doc_summary=doc_summary,
+                               doc_title=doc_title,
                                job_id=job_id)
 
     except Exception as e:
@@ -264,6 +237,7 @@ def payment_success():
         parsed_data = json.loads(schedule_json)
         parsed_schedule = parsed_data.get('shifts', [])
         timezone_str = parsed_data.get('timezone', 'America/Los_Angeles')
+        raw_title = parsed_data.get('doc_title', '')
         if not parsed_schedule:
             return render_template('link_expired.html'), 410
     except Exception as e:
@@ -276,8 +250,9 @@ def payment_success():
                                           calendar_name="myschedule.cloud",
                                           timezone_str=timezone_str)
 
-    # Store ICS in GCS under ics/ prefix
-    ics_blob_path = f"ics/{job_id}.ics"
+    # Store ICS in GCS — embed doc title in blob name for filename derivation
+    safe_title = re.sub(r'[^\w\s-]', '', raw_title).strip().replace(' ', '_')[:40] if raw_title else 'schedule'
+    ics_blob_path = f"ics/{job_id}_{safe_title}.ics"
     client = _gcs_client()
     bucket = client.bucket(_bucket_name())
     ics_blob = bucket.blob(ics_blob_path)
@@ -306,11 +281,14 @@ def download_ics(token):
         logger.warning(f"[download_ics] Token invalid: {e}")
         return render_template('link_expired.html'), 410
 
-    ics_blob_path = f"ics/{job_id}.ics"
     try:
         client = _gcs_client()
         bucket = client.bucket(_bucket_name())
-        blob = bucket.blob(ics_blob_path)
+        blobs = list(bucket.list_blobs(prefix=f"ics/{job_id}"))
+        if not blobs:
+            raise FileNotFoundError("ICS blob not found")
+        blob = blobs[0]
+        ics_blob_path = blob.name
         ics_content = blob.download_as_bytes()
     except Exception as e:
         logger.error(f"[download_ics] GCS error: {e}")
@@ -319,8 +297,10 @@ def download_ics(token):
     # Delete from GCS after serving
     _delete_from_gcs(ics_blob_path)
 
+    blob_basename = ics_blob_path.split('/')[-1]
+    safe_title = blob_basename[len(job_id)+1:].replace('.ics', '')
     now = datetime.datetime.now().strftime('%Y%m%d_%H%M')
-    filename = f"work_schedule_{now}.ics"
+    filename = f"{safe_title}_{now}.ics"
     response = Response(ics_content, mimetype="text/calendar")
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
