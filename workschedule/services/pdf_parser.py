@@ -176,4 +176,4 @@ def parse_pdf_with_claude(pdf_bytes: bytes) -> list:
             logger.warning(f"Skipping malformed event {ev}: {e}")
             continue
 
-    return entries
+    return entries, doc_title
