@@ -27,6 +27,7 @@ Rules:
 - Year ambiguity: assume nearest future occurrence relative to today's date
 - If the document appears to be a scanned image with no extractable text, \
 return an empty events array and set confidence to "low"
+- Deduplicate: if the same date and event appears more than once, include it only once
 - Return ONLY valid JSON, no preamble, no markdown fences
 
 Return this exact structure:
@@ -90,7 +91,7 @@ def parse_pdf_with_claude(pdf_bytes: bytes) -> list:
 
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=2000,
+        max_tokens=4096,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": USER_PROMPT_TEMPLATE.format(
             today=today,
