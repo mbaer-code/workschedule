@@ -1,272 +1,178 @@
-"""
-pdf_parser.py
--------------
-AI-powered document parser that replaces the regex-based parse_schedule_text().
-
-Two-pass approach:
-  Pass 1 - Understand the document: what kind is it, what year/context applies
-  Pass 2 - Extract calendar-worthy events given that context
-
-Output format matches what the rest of the pipeline (ics_generator.py) expects:
-  {
-      'shift_date':   'Mon, Sep 08',   # strftime('%a, %b %d')
-      'shift_start':  '11:30 AM',      # or '' if all-day
-      'shift_end':    '8:00 PM',       # or '' if all-day
-      'department':   'Plumbing',      # role/subject/context label
-      'store_number': '0660'           # location/section/code or ''
-  }
-
-Drop-in replacement: just swap parse_schedule_text(text) for parse_document(text).
-"""
-
+import os
+import datetime
 import json
 import logging
-import os
-import re
-from datetime import datetime
 
+import fitz  # PyMuPDF
 import anthropic
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Anthropic client (API key from environment)
-# ---------------------------------------------------------------------------
-def _client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY environment variable not set.")
-    return anthropic.Anthropic(api_key=api_key)
+SYSTEM_PROMPT = """You are a calendar event extractor. Your job is to read any document \
+and extract all dates and events into structured calendar data.
 
-
-MODEL = "claude-haiku-4-5-20251001"   # cheap, fast, accurate enough
-
-
-# ---------------------------------------------------------------------------
-# Pass 1 — Document context
-# ---------------------------------------------------------------------------
-CONTEXT_PROMPT = """You are a document analyst. Read the text below and return ONLY a JSON object — no explanation, no markdown.
-
-Return this exact structure:
-{{
-  "doc_type": "work_schedule | syllabus | project_plan | itinerary | meeting_schedule | other",
-  "summary": "one sentence describing what the document is",
-  "year": "4-digit year if determinable, else null",
-  "subject": "employer/course/project name if present, else null",
-  "location": "store number, campus, office, etc. if present, else null",
-  "has_calendar_content": true or false
-}}
-
-Document text:
-{text}"""
-
-
-def _get_document_context(text: str) -> dict:
-    """Pass 1: understand what the document is."""
-    prompt = CONTEXT_PROMPT.format(text=text[:3000])
-    try:
-        response = _client().messages.create(
-            model=MODEL,
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = response.content[0].text.strip()
-        # Strip markdown fences if present
-        raw = re.sub(r"^```[a-z]*\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
-        return json.loads(raw)
-    except Exception as e:
-        logger.warning(f"[pdf_parser] Context pass failed: {e}")
-        return {"has_calendar_content": True, "year": None, "location": "", "subject": ""}
-
-
-# ---------------------------------------------------------------------------
-# Pass 2 — Event extraction
-# ---------------------------------------------------------------------------
-EXTRACT_PROMPT = """You are a calendar assistant. Extract every shift/event from the schedule text below.
-
-Context about this document:
-- Type: {doc_type}
-- Subject/Employer: {subject}
-- Location/Store: {location}
-- Year: {year}
-
-Return ONLY a JSON array of objects with these exact keys (no extra keys, no markdown):
-[
-  {{
-    "shift_date": "Mon, Sep 08",
-    "shift_start": "11:30 AM",
-    "shift_end": "8:00 PM",
-    "department": "Plumbing & Bath Associate",
-    "store_number": "0660"
-  }}
-]
+Classify the document and extract events appropriate to its type:
+- work_schedule: shifts with start/end times
+- syllabus: assignments, exams, class sessions, deadlines
+- legal: deadlines, hearings, response dates
+- project: milestones, deliverables, meetings
+- general: any date-referenced event or deadline
 
 Rules:
-- shift_date format: abbreviated weekday, abbreviated month, zero-padded day (e.g. "Mon, Sep 08")
-- shift_start / shift_end: 12-hour time with AM/PM (e.g. "11:30 AM", "8:00 PM")
-- If no time (day off, holiday): use empty string "" for shift_start and shift_end
-- department: role or department label; use empty string if not found
-- store_number: store/location number; use empty string if not found
-- Skip days off and non-work entries
-- If the year is provided in context, use it to resolve any ambiguous dates
+- title: short, max 30 characters, what the event IS
+- context: the source document name or organization, used in description
+- For recurring events (e.g. "class meets MWF"), expand into individual events
+- For all-day events with no time, set all_day true and omit times
+- Include person's name in title if multiple people's schedules are present
+- Year ambiguity: assume nearest future occurrence relative to today's date
+- If the document appears to be a scanned image with no extractable text, \
+return an empty events array and set confidence to "low"
+- Deduplicate: if the same date and event appears more than once, include it only once
+- For academic calendars with "Key Dates" and per-session breakdown sections, extract only from the "Key Dates" sections — skip the redundant per-session deadline breakdowns
+- Cap output at 60 events maximum; if more exist, keep the most student-relevant ones
+- Return ONLY valid JSON, no preamble, no markdown fences
 
-Schedule text:
-{text}"""
+Return this exact structure:
+{
+  "document_type": "work_schedule|syllabus|legal|project|general",
+  "document_title": "brief descriptive title of the source document",
+  "confidence": "high|medium|low",
+  "events": [
+    {
+      "title": "short event title, 30 chars max",
+      "context": "source document or organization name",
+      "date": "YYYY-MM-DD",
+      "start_time": "HH:MM" or null,
+      "end_time": "HH:MM" or null,
+      "all_day": true or false,
+      "notes": "any useful context" or null
+    }
+  ]
+}"""
+
+USER_PROMPT_TEMPLATE = """Today's date is {today}.
+Use this to resolve relative dates and year ambiguity — \
+assume the nearest future occurrence of any undated event.
+
+Extract all calendar events from this document:
+
+{extracted_text}"""
 
 
-def _extract_events(text: str, context: dict) -> list:
-    """Pass 2: extract structured events from the document."""
-    prompt = EXTRACT_PROMPT.format(
-        doc_type=context.get("doc_type", "work_schedule"),
-        subject=context.get("subject") or "",
-        location=context.get("location") or "",
-        year=context.get("year") or datetime.now().year,
-        text=text[:6000]
-    )
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     try:
-        response = _client().messages.create(
-            model=MODEL,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = response.content[0].text.strip()
-        raw = re.sub(r"^```[a-z]*\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
-        return json.loads(raw)
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        text = "".join(page.get_text() for page in doc)
+        doc.close()
+        return text
     except Exception as e:
-        logger.error(f"[pdf_parser] Extraction pass failed: {e}")
+        logger.error(f"PDF text extraction failed: {e}")
+        return ""
+
+
+def _fmt_time(t: str) -> str:
+    """Convert 24h 'HH:MM' to 12h 'H:MM AM/PM' as expected by ics_generator."""
+    dt = datetime.datetime.strptime(t, "%H:%M")
+    hour = dt.hour % 12 or 12
+    ampm = "AM" if dt.hour < 12 else "PM"
+    return f"{hour}:{dt.strftime('%M')} {ampm}"
+
+
+def parse_pdf_with_claude(pdf_bytes: bytes) -> list:
+    """
+    Extract calendar events from a PDF using Claude Haiku.
+    Returns a list of dicts compatible with create_ics_from_entries.
+    """
+    MAX_INPUT_CHARS = 24_000
+
+    text = extract_text_from_pdf(pdf_bytes)
+    if not text or len(text.strip()) < 20:
+        logger.warning("No extractable text in PDF")
         return []
 
+    if len(text) > MAX_INPUT_CHARS:
+        logger.warning(f"Document too long ({len(text)} chars), exceeds {MAX_INPUT_CHARS} limit")
+        raise ValueError(
+            "This document is too long to process. Please upload a shorter document."
+        )
 
-# ---------------------------------------------------------------------------
-# Validation helpers (exported so tests can import them directly)
-# ---------------------------------------------------------------------------
-REQUIRED_KEYS = {"shift_date", "shift_start", "shift_end", "department", "store_number"}
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    today = datetime.date.today().isoformat()
 
-# Accepts "Mon, Sep 08" or "Sep 08" (weekday prefix optional)
-DATE_RE = re.compile(r"^(?:[A-Z][a-z]{2}, )?[A-Z][a-z]{2} \d{2}$")
-TIME_RE = re.compile(r"^\d{1,2}:\d{2} [AP]M$")   # 12-hour only, e.g. "11:30 AM"
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=8192,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": USER_PROMPT_TEMPLATE.format(
+            today=today,
+            extracted_text=text
+        )}]
+    )
 
+    usage = response.usage
+    logger.info(f"Haiku usage: input={usage.input_tokens} output={usage.output_tokens}")
 
-def _is_valid_date(value, year: str) -> bool:
-    """Return True if value looks like a real calendar date string."""
-    if not value or not isinstance(value, str):
-        return False
-    return bool(DATE_RE.match(value.strip()))
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.error(f"Haiku returned invalid JSON: {e}\nRaw: {raw[:500]}")
+        raise ValueError("AI parser returned an unreadable response. Please try again.")
 
+    doc_type = result.get("document_type", "unknown")
+    doc_title = result.get("document_title", "")
+    confidence = result.get("confidence", "unknown")
+    events = result.get("events", [])
 
-def _is_valid_time(value) -> bool:
-    """Return True for a valid 12-hour time string OR empty string (all-day)."""
-    if value is None:
-        return False
-    if value == "":
-        return True   # empty = all-day event, valid
-    return bool(TIME_RE.match(value.strip()))
+    logger.info(f"Document: type={doc_type!r} title={doc_title!r} confidence={confidence} events={len(events)}")
 
+    entries = []
+    for ev in events:
+        try:
+            date_str = ev.get("date")
+            if not date_str:
+                continue
+            date_obj = datetime.date.fromisoformat(date_str)
+            shift_date = date_obj.strftime("%a, %b %d")
 
-def _is_meaningful_title(value) -> bool:
-    """Return True if value is a non-trivial department/title string."""
-    if not value or not isinstance(value, str):
-        return False
-    stripped = value.strip()
-    if len(stripped) <= 1:
-        return False
-    if stripped.isdigit():
-        return False
-    return True
+            all_day = ev.get("all_day", False)
+            start_raw = ev.get("start_time")
+            end_raw = ev.get("end_time")
 
+            if all_day or not start_raw:
+                shift_start = ""
+                shift_end = ""
+            else:
+                shift_start = _fmt_time(start_raw)
+                shift_end = _fmt_time(end_raw) if end_raw else shift_start
 
-def _validate_events(events: list, context: dict) -> list:
-    """Filter out malformed events and fill in missing store_number from context."""
-    year = str(context.get("year") or datetime.now().year)
-    default_store = context.get("location") or ""
-    clean = []
-    for i, ev in enumerate(events):
-        if not isinstance(ev, dict):
-            logger.debug(f"[pdf_parser] Skipping non-dict event at index {i}")
+            # For work schedules use a neutral title; other types keep Haiku's title
+            if doc_type == "work_schedule":
+                event_title = "Work Shift"
+            else:
+                event_title = ev.get("title", "Event")
+
+            # Trim context to the first segment before " - " to avoid verbose suffixes
+            context = ev.get("context", "")
+            if " - " in context:
+                context = context.split(" - ")[0].strip()
+            # Cap at 40 chars for display
+            if len(context) > 40:
+                context = context[:38].rstrip() + "…"
+
+            entries.append({
+                "shift_date": shift_date,
+                "shift_start": shift_start,
+                "shift_end": shift_end,
+                "department": context,
+                "store_number": "",
+                "event_title": event_title,
+                "all_day": all_day,
+            })
+        except Exception as e:
+            logger.warning(f"Skipping malformed event {ev}: {e}")
             continue
-        if not REQUIRED_KEYS.issubset(ev.keys()):
-            logger.debug(f"[pdf_parser] Skipping event missing keys: {ev}")
-            continue
-        if not _is_valid_date(ev.get("shift_date"), year):
-            logger.debug(f"[pdf_parser] Bad date: {ev.get('shift_date')}")
-            continue
-        start = ev.get("shift_start", "")
-        end = ev.get("shift_end", "")
-        if not _is_valid_time(start):
-            logger.debug(f"[pdf_parser] Bad start time: {start}")
-            continue
-        if not _is_valid_time(end):
-            logger.debug(f"[pdf_parser] Bad end time: {end}")
-            continue
-        # Reject mismatched times: one set, the other empty
-        if bool(start) != bool(end):
-            logger.debug(f"[pdf_parser] Mismatched times start={start!r} end={end!r}")
-            continue
-        # Require a meaningful department/title
-        if not _is_meaningful_title(ev.get("department")):
-            logger.debug(f"[pdf_parser] No meaningful title: {ev.get('department')!r}")
-            continue
-        # Fill in store number from context if blank
-        if not ev.get("store_number") and default_store:
-            ev["store_number"] = default_store
-        clean.append(ev)
-    return clean
 
-
-# ---------------------------------------------------------------------------
-# Internal summary formatter (no API call)
-# ---------------------------------------------------------------------------
-def _format_summary(context: dict) -> str:
-    """Build a human-readable summary string from an already-fetched context dict."""
-    summary = context.get("summary", "")
-    subject = context.get("subject")
-    location = context.get("location")
-    extras = ", ".join(filter(None, [subject, location]))
-    if extras:
-        return f"{summary} ({extras})"
-    return summary
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-def parse_document_with_summary(text: str) -> tuple:
-    """
-    Single entry point: runs Pass 1 once, then Pass 2.
-    Returns (events: list, summary: str) — 2 API calls total.
-
-    Preferred over calling parse_document() + get_document_summary() separately
-    which would make 3 API calls.
-    """
-    if not text or len(text.strip()) < 20:
-        logger.warning("[pdf_parser] Text too short to parse")
-        return [], ""
-
-    # Pass 1: understand the document
-    context = _get_document_context(text)
-    summary = _format_summary(context)
-
-    if not context.get("has_calendar_content", True):
-        logger.info("[pdf_parser] Document has no calendar content per context pass")
-        return [], summary
-
-    # Pass 2: extract events
-    events = _extract_events(text, context)
-    validated = _validate_events(events, context)
-
-    logger.info(f"[pdf_parser] Parsed {len(validated)} events from document")
-    return validated, summary
-
-
-def parse_document(text: str) -> list:
-    """Backward-compatible wrapper — use parse_document_with_summary() in new code."""
-    events, _ = parse_document_with_summary(text)
-    return events
-
-
-def get_document_summary(text: str) -> str:
-    """Backward-compatible wrapper — use parse_document_with_summary() in new code."""
-    _, summary = parse_document_with_summary(text)
-    return summary
+    return entries, doc_title
