@@ -41,7 +41,6 @@
 </head>
 <body class="bg-gray-50 antialiased">
 
-    <!-- Navigation Bar -->
     <header class="bg-white shadow-sm sticky top-0 z-50">
         <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
             <div class="text-2xl font-bold text-sky-600">
@@ -49,8 +48,7 @@
             </div>
             <div class="flex items-center space-x-6">
                 <a href="#about-us" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">About Us</a>
-                <a id="auth-link" href="#" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">
-                </a>
+                <a id="auth-link" href="#" class="text-gray-600 hover:text-sky-600 transition-colors duration-300"></a>
                 <a href="/schedule/upload" class="bg-sky-600 text-white px-5 py-2 rounded-full font-semibold hover:bg-sky-700 transition-colors duration-300">
                     Upload
                 </a>
@@ -59,33 +57,53 @@
     </header>
 
     <main id="app-container">
-        <!-- Landing Page Content -->
         <div id="landing-page" class="active-content">
 
-            <!-- Hero Section -->
-            <section class="bg-sky-600 text-white py-16 md:py-24 text-center rounded-b-3xl">
-                <div class="container mx-auto px-6">
-                    <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
-                        PDF? Got Dates? Under 15 Pages?<br>We Can Convert It.
+            <!-- HERO / LANDING SECTION -->
+            <section class="bg-sky-600 text-white py-20 md:py-28 text-center rounded-b-3xl shadow-md">
+                <div class="container mx-auto px-6 max-w-3xl">
+                    
+                    <!-- Clean, direct headline -->
+                    <h1 class="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight">
+                        Extract Calendar Events from Any PDF
                     </h1>
-                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-6 opacity-90">
-                        Upload your schedule. We parse the dates. Done.
+                    
+                    <!-- Simple description acknowledging the user's intent -->
+                    <p class="text-lg md:text-xl font-normal leading-relaxed opacity-90 mb-8 max-w-2xl mx-auto">
+                        Got a document with schedules or deadlines buried inside it? Upload your PDF here. We'll find the dates and give you a clean <code class="bg-sky-700/50 px-1.5 py-0.5 rounded font-mono text-sm">.ics</code> file to drop straight into your calendar.
                     </p>
-                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 opacity-90">
-                        Use the coupon code <strong>FREE</strong> at checkout — it's on us.
-                    </p>
-                    <a href="/schedule/upload" class="bg-white text-sky-600 font-bold py-3 px-10 rounded-full shadow-lg hover:bg-gray-100 transition-colors duration-300 transform hover:scale-105 inline-block">
-                        Upload a PDF
-                    </a>
-                    <p class="mt-4 text-sm opacity-70">Don't have a PDF? Try <strong>Print to PDF</strong> from your scheduling app or browser.</p>
+
+                    <!-- Promo Badge (Easy to remove later if coupon expires) -->
+                    <div class="inline-flex items-center gap-2 bg-sky-500/40 border border-sky-400/20 px-4 py-1.5 rounded-full text-sm font-medium mb-10 backdrop-blur-sm">
+                        <span>✨ Limited Time: Use code <strong class="font-bold underline">FREE</strong> at checkout</span>
+                    </div>
+
+                    <!-- Main Action -->
+                    <div class="mb-12">
+                        <a href="/schedule/upload" class="bg-white text-sky-600 font-bold py-4 px-12 rounded-full shadow-xl hover:bg-gray-50 transition-all duration-300 transform hover:-translate-y-0.5 inline-block text-lg tracking-wide">
+                            Upload your PDF
+                        </a>
+                    </div>
+
+                    <!-- Clear, transparent processing footnotes -->
+                    <div class="text-sm opacity-75 max-w-xl mx-auto space-y-2 border-t border-sky-500/40 pt-6">
+                        <p>
+                            Image-only PDFs or files over 15 pages might not parse successfully.
+                            <span class="block md:inline font-medium opacity-100"> Processing failures are never charged.</span>
+                        </p>
+                        <p class="text-xs opacity-90 italic">
+                            Tip: Don't have a raw PDF file? Use <strong>Print to PDF</strong> in your app or web browser first.
+                        </p>
+                    </div>
+
                 </div>
             </section>
 
-            <!-- Works With Section -->
+            <!-- FEATURES / SOURCES SECTION -->
             <section class="py-16 bg-white">
                 <div class="container mx-auto px-6">
                     <h2 class="text-3xl font-bold text-center mb-3 text-gray-800">Works with PDFs from any source</h2>
-                    <p class="text-center text-gray-500 mb-10 max-w-xl mx-auto">If it has dates and comes as a PDF, we can convert it.</p>
+                    <p class="text-center text-gray-500 mb-10 max-w-2xl mx-auto">If it has dates and comes as a PDF under 15 pages, we can convert it for your calendar.</p>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 
@@ -159,25 +177,44 @@
                 </div>
             </section>
 
-            <!-- Data Privacy Section -->
-            <section class="py-16 bg-sky-600 text-white text-center">
-                <div class="container mx-auto px-6 max-w-2xl">
-                    <h2 class="text-2xl font-bold mb-6">About your data</h2>
-                    <p class="text-lg mb-4 opacity-90">
-                        This is a stateless service — we don't keep any data on our users. Information needed to perform the conversion is held in temporary storage for a few moments, then it's gone.
+            <!-- REFRESHED DATA PRIVACY SECTION -->
+            <section class="py-20 bg-gradient-to-b from-sky-600 to-sky-700 text-white">
+                <div class="container mx-auto px-6 max-w-4xl text-center">
+                    <h2 class="text-3xl font-extrabold mb-3 tracking-tight">Your Data & Privacy</h2>
+                    <p class="text-sky-100 text-lg mb-12 max-w-2xl mx-auto opacity-90">
+                        We built this to clean up scheduling hassles, not to collect your information. Here is exactly how your data is handled:
                     </p>
-                    <p class="text-lg opacity-90">
-                        Our payment processor, Stripe, does not sell your personal or financial information to marketers or third parties. See their site for details.
-                    </p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+                        <!-- Stateless Service Card -->
+                        <div class="bg-sky-500/20 border border-sky-400/20 p-8 rounded-2xl backdrop-blur-sm shadow-inner">
+                            <h3 class="text-xl font-bold mb-3 flex items-center gap-2">
+                                <span>🔒</span> Stateless & Temporary
+                            </h3>
+                            <p class="text-sky-100 leading-relaxed text-sm md:text-base opacity-95">
+                                This is a completely stateless service. We don't store files or keep data on our users. Your PDF information is only parsed in temporary memory for a few moments to generate the calendar file, and then it is immediately destroyed.
+                            </p>
+                        </div>
+
+                        <!-- Secure Payments Card -->
+                        <div class="bg-sky-500/20 border border-sky-400/20 p-8 rounded-2xl backdrop-blur-sm shadow-inner">
+                            <h3 class="text-xl font-bold mb-3 flex items-center gap-2">
+                                <span>💳</span> Secure Processing
+                            </h3>
+                            <p class="text-sky-100 leading-relaxed text-sm md:text-base opacity-95">
+                                Payments are handled securely via Stripe. Our payment processor does not sell your personal or financial details to marketers or outside third parties. Your transactions stay completely confidential.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <!-- Final Call to Action Section -->
+            <!-- BOTTOM CTA SECTION -->
             <section class="py-20 bg-white text-center">
                 <div class="container mx-auto px-6">
                     <h2 class="text-3xl md:text-4xl font-bold mb-4 text-gray-800">Ready to get your dates into your calendar?</h2>
                     <p class="text-lg max-w-2xl mx-auto mb-8 text-gray-600">
-                        Upload any PDF with dates and we'll handle the rest. Use code <strong>FREE</strong> — it's on us.
+                        Upload any PDF with dates and we'll parse it right into a calendar file. Use code <strong>FREE</strong> at checkout and it's on us.
                     </p>
                     <a href="/schedule/upload" class="bg-sky-600 text-white font-bold py-3 px-10 rounded-full shadow-lg hover:bg-sky-700 transition-colors duration-300 transform hover:scale-105 inline-block">
                         Try It Free
@@ -185,7 +222,7 @@
                 </div>
             </section>
 
-            <!-- About Us Section -->
+            <!-- ABOUT US SECTION -->
             <section id="about-us" class="py-16 bg-gray-100">
                 <div class="container mx-auto px-6 text-center">
                     <h2 class="text-3xl font-bold mb-4 text-gray-800">About MySchedule.cloud</h2>
@@ -198,7 +235,7 @@
             <section class="bg-gray-100 py-8"></section>
         </div>
 
-        <!-- Dashboard Content -->
+        <!-- DASHBOARD CONTAINER -->
         <div id="dashboard" class="hidden">
             <section class="py-16 md:py-24 text-center">
                 <div class="container mx-auto px-6">
@@ -216,7 +253,7 @@
         </div>
     </main>
 
-    <!-- Login Modal -->
+    <!-- AUTHENTICATION MODAL -->
     <div id="login-modal" class="modal-overlay">
         <div class="modal-content">
             <h2 class="text-2xl font-bold mb-6 text-gray-800">Log In to Your Account</h2>
@@ -235,6 +272,7 @@
         </div>
     </div>
 
+    <!-- CORE LOGIC SCRIPTS -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const authLink = document.getElementById('auth-link');
@@ -256,7 +294,6 @@
             const showLandingPage = () => {
                landingPage.classList.remove('hidden');
                dashboard.classList.add('hidden');
-               authLink.textContent = 'Log In / Sign Up';
                authLink.onclick = () => loginModal.style.display = 'flex';
             };
 
