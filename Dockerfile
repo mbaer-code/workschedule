@@ -23,7 +23,15 @@ COPY instance/service-account.json /instance/service-account.json
 ENV PYTHONUNBUFFERED=1
 
 # Define the entrypoint for the container
-CMD python -m gunicorn --bind 0.0.0.0:${PORT} workschedule.wsgi:app
+# --timeout 120: gunicorn's default worker timeout is 30s, which is too
+# short for /schedule/upload_pdf — it makes two sequential Anthropic API
+# calls (context pass + extraction pass) plus a GCS write. Under the
+# default, a slow request (cold start, API latency, larger document) gets
+# its worker killed mid-request with no response sent to the client at
+# all — not an error page, just a dropped connection. 120s gives real
+# headroom while staying well under Cloud Run's own 300s default request
+# timeout.
+CMD python -m gunicorn --bind 0.0.0.0:${PORT} --timeout 120 workschedule.wsgi:app
 
 # Expose the port that the application will listen on
 EXPOSE 8080
