@@ -9,6 +9,7 @@ __pycache__/
 *.pyd
 *.egg-info
 *.pdf
+!tests/fixtures/*.pdf
 dist
 build
 *.so

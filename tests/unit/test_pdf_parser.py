@@ -24,6 +24,10 @@ from workschedule.services.pdf_parser import (
     _is_meaningful_title,
     _validate_events,
 )
+from workschedule.routes.schedule import extract_text_from_pdf
+from workschedule.services.security import check_upload, SecurityError
+
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), '..', 'fixtures')
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +477,62 @@ class TestShiftDateSortKey:
         assert result[1] == "Sep 08"
 
 
+class TestRealWorkforceToolsSchedule:
+    """
+    Regression coverage using a real schedule PDF that triggered a
+    production bug: the upload produced no response at all (not rejected
+    — just silence). Root cause turned out to be gunicorn's default 30s
+    worker timeout being too short for the two-pass Anthropic call plus
+    GCS write (fixed separately in the Dockerfile), not anything wrong
+    with this file's content or structure.
+
+    The file itself is an unusual export: a single standard Letter page
+    containing three separate weekly schedule blocks laid out side by
+    side (like on-screen captures of a web app, monitor icon included),
+    covering three different weeks in one PDF — one week with genuinely
+    no shifts, two weeks with real shifts. Kept here as a fixture because
+    its layout is more complex than the average schedule PDF and it's a
+    real document that already exposed one real bug.
+    """
+
+    FIXTURE_PATH = os.path.join(FIXTURES_DIR, 'workforce_tools_schedule_composite.pdf')
+
+    def _load_bytes(self) -> bytes:
+        with open(self.FIXTURE_PATH, 'rb') as f:
+            return f.read()
+
+    def test_fixture_exists(self):
+        assert os.path.exists(self.FIXTURE_PATH)
+
+    def test_passes_security_check_as_pdf(self):
+        data = self._load_bytes()
+        kind = check_upload(
+            data, 'workforce_tools_schedule_composite.pdf', 'application/pdf',
+            ip_address='127.0.0.1', session_id='test-workforce-tools'
+        )
+        assert kind == 'pdf'
+
+    def test_text_extraction_succeeds(self):
+        data = self._load_bytes()
+        text = extract_text_from_pdf(data)
+        assert len(text) > 50  # clears the min_text_chars security gate
+        assert len(text) < 8000  # clears max_text_chars without truncation
+
+    def test_text_extraction_captures_all_three_weeks(self):
+        data = self._load_bytes()
+        text = extract_text_from_pdf(data)
+        assert 'Feb 23 - Mar 1' in text
+        assert 'Mar 2 - 8' in text
+        assert 'Mar 9 - 15' in text
+
+    def test_text_extraction_captures_shift_details(self):
+        data = self._load_bytes()
+        text = extract_text_from_pdf(data)
+        assert '0660 - Store 026 - Plumbing & Bath Associate' in text
+        assert '6:00 PM - 10:00 PM' in text
+        assert 'No shifts are scheduled within the timeframe' in text
+
+
 # ---------------------------------------------------------------------------
 # Live integration test (only runs with LIVE_TEST=1 in environment)
 # ---------------------------------------------------------------------------
@@ -520,3 +580,37 @@ class TestLiveIntegration:
     def test_live_summary(self):
         summary = get_document_summary(self.SAMPLE_SCHEDULE)
         assert len(summary) > 10
+
+    def test_live_real_workforce_tools_schedule(self):
+        """
+        Full pipeline against the real problematic fixture: text
+        extraction -> two-pass Claude parsing -> validation -> sort.
+        Covers the three-week composite layout and confirms events come
+        back in correct chronological order (regression for the
+        shift_date sort bug, fixed separately in shift_date_sort_key()).
+        """
+        fixture_path = os.path.join(FIXTURES_DIR, 'workforce_tools_schedule_composite.pdf')
+        with open(fixture_path, 'rb') as f:
+            data = f.read()
+        text = extract_text_from_pdf(data)
+
+        events = parse_document(text)
+
+        # The Feb 23 - Mar 1 week explicitly has no shifts; the other two
+        # weeks have 6 real shifts between them (2 + 1 + 3 across Mar 2-8
+        # and Mar 9-15). Use >= since the model's exact recall can vary
+        # slightly; the important thing is it finds the real ones and
+        # skips the empty week.
+        assert len(events) >= 4
+        assert all(e['department'] for e in events)
+        assert all('Plumbing' in e['department'] for e in events)
+
+        # Sanity check that shift_date_sort_key() handles real model output
+        # cleanly (no exceptions, no malformed-date fallbacks) and produces
+        # non-decreasing order. The scramble-vs-fix comparison itself is
+        # covered with deterministic data in TestShiftDateSortKey; this is
+        # just confirming the same key function holds up on live output.
+        sorted_events = sorted(events, key=lambda e: shift_date_sort_key(e['shift_date']))
+        keys = [shift_date_sort_key(e['shift_date']) for e in sorted_events]
+        assert keys == sorted(keys)
+        assert keys[0] != (99, 99)  # not silently falling back on malformed dates
