@@ -75,8 +75,8 @@
 
             <!-- PDF upload -->
             <div class="custom-file-input" id="drop-zone">
-                <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf" required>
-                <span class="custom-file-input-text">Click or drag a PDF file here</span>
+                <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf,image/png,image/jpeg" required>
+                <span class="custom-file-input-text">Click or drag a PDF or photo of your schedule here</span>
                 {% if pdf_error %}
                 <div class="text-red-600 text-sm mt-1">{{ pdf_error }}</div>
                 {% endif %}
@@ -145,7 +145,7 @@
                 fileInputText.textContent = e.target.files[0].name;
                 fileInput.parentNode.style.borderColor = '#0ea5e9';
             } else {
-                fileInputText.textContent = 'Click or drag a PDF file here';
+                fileInputText.textContent = 'Click or drag a PDF or photo of your schedule here';
                 fileInput.parentNode.style.borderColor = '#ccc';
             }
         });

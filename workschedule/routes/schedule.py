@@ -1,5 +1,6 @@
 import os
 import datetime
+import io
 import json
 import hmac
 import hashlib
@@ -16,7 +17,11 @@ from werkzeug.utils import secure_filename
 
 from workschedule.services.stripe_service import create_checkout_session
 from workschedule.services.security import check_upload, check_text, SecurityError
-from workschedule.services.pdf_parser import parse_document_with_summary
+from workschedule.services.parser_limits import limits
+from workschedule.services.pdf_parser import (
+    parse_document_with_summary,
+    parse_image_with_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +137,48 @@ def extract_text_from_pdf(pdf_contents: bytes) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Image preprocessing (phone photos of schedules)
+# ---------------------------------------------------------------------------
+def prepare_image_for_ai(image_bytes: bytes) -> bytes:
+    """
+    Normalize an uploaded image before sending it to the vision API:
+      - Resize so the longest edge is capped (bounds vision token cost
+        and latency regardless of the original photo's resolution)
+      - Re-encode as JPEG, which drops EXIF metadata (GPS, device info,
+        etc.) as a side effect since it isn't carried over explicitly —
+        consistent with the zero-retention principle: nothing about the
+        photo's origin persists past this request
+      - Converts any color mode (e.g. PNG with alpha) to plain RGB, which
+        JPEG requires
+
+    Raises ValueError if the image can't be decoded.
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            img.load()  # decode pixel data now, inside our own try/except
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            elif img.mode == "L":
+                img = img.convert("RGB")
+
+            width, height = img.size
+            longest_edge = max(width, height)
+            if longest_edge > limits.max_image_dimension:
+                scale = limits.max_image_dimension / longest_edge
+                new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+                img = img.resize(new_size, Image.LANCZOS)
+
+            output = io.BytesIO()
+            img.save(output, format="JPEG", quality=85)
+            return output.getvalue()
+    except Exception as e:
+        logger.error(f"Error preparing image for AI: {e}")
+        raise ValueError("Could not process the uploaded image.")
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -159,8 +206,10 @@ def upload_pdf():
         return redirect(url_for('schedule_bp.upload_schedule'))
 
     # --- Security gate (fast, free, runs before any API call) ---
+    # kind is detected from magic bytes, not the filename/MIME the browser
+    # sent — those are easily spoofed and only used for the earlier fail-fast checks.
     try:
-        check_upload(
+        kind = check_upload(
             file_bytes=pdf_contents,
             filename=secure_filename(pdf_file.filename),
             mimetype=pdf_file.content_type,
@@ -172,19 +221,30 @@ def upload_pdf():
         return render_template("upload_schedule_new.html", pdf_error=str(e))
 
     try:
-        # Extract text from PDF
-        extracted_text = extract_text_from_pdf(pdf_contents)
+        if kind == "image":
+            try:
+                processed_image = prepare_image_for_ai(pdf_contents)
+            except ValueError as e:
+                return render_template("upload_schedule_new.html", pdf_error=str(e))
 
-        # Text-level security check + truncation if needed
-        try:
-            safe_text = check_text(extracted_text)
-        except SecurityError as e:
-            return render_template("review_schedule.html", parsed_schedule=[],
-                                   raw_json=str(e))
+            # Single vision call returns both events and summary (1 API call)
+            parsed_entries, doc_summary = parse_image_with_summary(
+                processed_image, media_type="image/jpeg")
+            logger.info(f"[upload_pdf] Image document detected: {doc_summary}")
+        else:
+            # Extract text from PDF
+            extracted_text = extract_text_from_pdf(pdf_contents)
 
-        # Parse document — single call returns both events and summary (2 API calls)
-        parsed_entries, doc_summary = parse_document_with_summary(safe_text)
-        logger.info(f"[upload_pdf] Document detected: {doc_summary}")
+            # Text-level security check + truncation if needed
+            try:
+                safe_text = check_text(extracted_text)
+            except SecurityError as e:
+                return render_template("review_schedule.html", parsed_schedule=[],
+                                       raw_json=str(e))
+
+            # Parse document — single call returns both events and summary (2 API calls)
+            parsed_entries, doc_summary = parse_document_with_summary(safe_text)
+            logger.info(f"[upload_pdf] Document detected: {doc_summary}")
 
         if not parsed_entries:
             return render_template("review_schedule.html", parsed_schedule=[],

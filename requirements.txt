@@ -11,4 +11,5 @@ stripe
 pytest
 pytz
 PyMuPDF
+Pillow>=10.0.0
 anthropic>=0.25.0

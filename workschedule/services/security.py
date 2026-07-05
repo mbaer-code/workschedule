@@ -1,10 +1,14 @@
 """
 security.py
 -----------
-Security gate for the PDF upload pipeline.
+Security gate for the document upload pipeline (PDF or phone-photo image).
 
 Call check_upload() at the top of upload_pdf() before any processing.
-Call check_text() after extract_text_from_pdf() before calling the AI.
+It returns the detected file kind ("pdf" or "image") so the caller can
+branch to the right extraction path.
+
+Call check_text() after extract_text_from_pdf() before calling the AI
+(PDF path only — images skip straight to the vision call).
 
 All checks are fast and free — they run before any API call is made,
 so a rejected upload costs nothing.
@@ -13,10 +17,13 @@ Usage:
     from workschedule.services.security import check_upload, check_text, SecurityError
 
     try:
-        check_upload(file_bytes, filename, mimetype, ip_address, session_id)
-        text = extract_text_from_pdf(file_bytes)
-        check_text(text)
-        events = parse_document(text)
+        kind = check_upload(file_bytes, filename, mimetype, ip_address, session_id)
+        if kind == "pdf":
+            text = extract_text_from_pdf(file_bytes)
+            check_text(text)
+            events = parse_document(text)
+        else:
+            events = parse_image(file_bytes)
     except SecurityError as e:
         return render_template("upload_schedule_new.html", pdf_error=str(e))
 """
@@ -24,6 +31,7 @@ Usage:
 import logging
 import time
 from collections import defaultdict
+from io import BytesIO
 from threading import Lock
 
 from workschedule.services.parser_limits import limits
@@ -86,37 +94,94 @@ _rate_limiter = _RateLimiter()
 # File-level checks
 # ---------------------------------------------------------------------------
 
+_ACCEPT_MSG = "Only PDF files or PNG/JPEG photos are accepted."
+
+
 def _check_extension(filename: str):
     if not filename:
         raise SecurityError("No filename provided.")
     lower = filename.lower()
     if not any(lower.endswith(ext) for ext in limits.allowed_extensions):
-        raise SecurityError("Only PDF files are accepted.")
+        raise SecurityError(_ACCEPT_MSG)
 
 
 def _check_mime(mimetype: str):
     if mimetype and mimetype.split(';')[0].strip() not in limits.allowed_mime_types:
         logger.warning(f"[security] Unexpected MIME type: {mimetype}")
-        raise SecurityError("Only PDF files are accepted.")
+        raise SecurityError(_ACCEPT_MSG)
 
 
-def _check_magic_bytes(data: bytes):
-    if not data or not data.startswith(limits.pdf_magic_bytes):
-        logger.warning("[security] File failed magic bytes check — not a real PDF")
-        raise SecurityError("The file does not appear to be a valid PDF.")
+def _detect_kind(data: bytes) -> str:
+    """
+    Identify the real file type from its magic bytes — the only check that
+    can't be faked by renaming a file or forging a MIME header.
+    Returns "pdf" or "image". Raises SecurityError if neither matches.
+    """
+    if not data:
+        raise SecurityError("The uploaded file is empty.")
+    if data.startswith(limits.pdf_magic_bytes):
+        return "pdf"
+    if data.startswith(limits.png_magic_bytes):
+        return "image"
+    if data.startswith(limits.jpeg_magic_bytes):
+        return "image"
+    logger.warning("[security] File failed magic bytes check — unrecognized format")
+    raise SecurityError(
+        "The file does not appear to be a valid PDF, PNG, or JPEG."
+    )
 
 
-def _check_file_size(data: bytes):
+def _check_file_size(data: bytes, kind: str):
     size = len(data)
-    if size < limits.min_file_size_bytes:
-        raise SecurityError("The file is too small to be a valid PDF.")
-    if size > limits.max_file_size_bytes:
-        mb = limits.max_file_size_bytes // (1024 * 1024)
-        logger.warning(f"[security] File too large: {size} bytes")
+    if kind == "image":
+        if size < limits.min_image_size_bytes:
+            raise SecurityError("The image is too small to be a legible schedule photo.")
+        if size > limits.max_image_size_bytes:
+            mb = limits.max_image_size_bytes // (1024 * 1024)
+            logger.warning(f"[security] Image too large: {size} bytes")
+            raise SecurityError(
+                f"Image is too large. Maximum size is {mb}MB."
+            )
+    else:
+        if size < limits.min_file_size_bytes:
+            raise SecurityError("The file is too small to be a valid PDF.")
+        if size > limits.max_file_size_bytes:
+            mb = limits.max_file_size_bytes // (1024 * 1024)
+            logger.warning(f"[security] File too large: {size} bytes")
+            raise SecurityError(
+                f"File is too large. Maximum size is {mb}MB. "
+                f"Work schedule PDFs are typically under 1MB."
+            )
+
+
+def _check_image_dimensions(data: bytes):
+    """
+    Guard against decompression-bomb images: a small file on disk that
+    decodes to an enormous bitmap and exhausts memory/CPU. PIL's Image.open()
+    only reads the header here — it does not decode pixel data — so this is
+    cheap even for a maliciously crafted file.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        logger.error("[security] Pillow not installed — cannot validate image dimensions")
+        raise SecurityError("Image validation is temporarily unavailable. Please try a PDF instead.")
+
+    try:
+        with Image.open(BytesIO(data)) as img:
+            width, height = img.size
+    except Exception as e:
+        logger.warning(f"[security] Could not read image header: {e}")
+        raise SecurityError("The image file appears to be corrupted.")
+
+    pixels = width * height
+    if pixels > limits.max_image_pixels:
+        logger.warning(f"[security] Image dimensions too large: {width}x{height} = {pixels} px")
         raise SecurityError(
-            f"File is too large. Maximum size is {mb}MB. "
-            f"Work schedule PDFs are typically under 1MB."
+            "This image's resolution is too high. Please use a standard phone photo."
         )
+    if width <= 0 or height <= 0:
+        raise SecurityError("The image file appears to be corrupted.")
 
 
 # ---------------------------------------------------------------------------
@@ -147,10 +212,15 @@ def check_upload(
     mimetype: str,
     ip_address: str = None,
     session_id: str = None,
-):
+) -> str:
     """
     Run all file-level security checks before any processing.
     Raises SecurityError with a user-friendly message if anything fails.
+
+    Returns the detected file kind: "pdf" or "image". Callers should
+    branch extraction logic on this rather than trusting the extension
+    or MIME header, since the magic-bytes check is the only one of the
+    three that can't be spoofed.
     """
     logger.info(f"[security] Checking upload: {filename}, "
                 f"size={len(file_bytes)}, mime={mimetype}, ip={ip_address}")
@@ -161,13 +231,19 @@ def check_upload(
     if session_id:
         _rate_limiter.check_session(session_id)
 
-    # File checks
+    # Cheap, spoofable checks first — fail fast before the real check
     _check_extension(filename)
     _check_mime(mimetype)
-    _check_file_size(file_bytes)
-    _check_magic_bytes(file_bytes)
 
-    logger.info(f"[security] Upload passed all checks: {filename}")
+    # Ground-truth check: what does the file actually contain?
+    kind = _detect_kind(file_bytes)
+
+    _check_file_size(file_bytes, kind)
+    if kind == "image":
+        _check_image_dimensions(file_bytes)
+
+    logger.info(f"[security] Upload passed all checks: {filename} (kind={kind})")
+    return kind
 
 
 def check_text(text: str) -> str:

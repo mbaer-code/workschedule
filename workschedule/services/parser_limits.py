@@ -69,22 +69,63 @@ class ParserLimits:
     )
 
     # ------------------------------------------------------------------
+    # Image checks (phone photos of schedules)
+    # ------------------------------------------------------------------
+
+    # Maximum upload size for images. Modern phone camera JPEGs typically
+    # run 2-8MB; 10MB is generous headroom without inviting abuse.
+    max_image_size_bytes: int = field(
+        default_factory=lambda: int(
+            os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
+    )
+
+    # Minimum image size — anything smaller is almost certainly not a
+    # legible photo of a schedule.
+    min_image_size_bytes: int = field(
+        default_factory=lambda: int(os.getenv("MIN_IMAGE_SIZE_BYTES", "512"))
+    )
+
+    # Maximum decoded pixel count (width * height). Protects against
+    # decompression-bomb files: a tiny file on disk that decodes to a
+    # huge in-memory bitmap. 40 megapixels comfortably covers modern
+    # phone cameras (typically 12-48MP) while capping worst-case memory.
+    max_image_pixels: int = field(
+        default_factory=lambda: int(os.getenv("MAX_IMAGE_PIXELS", str(40_000_000)))
+    )
+
+    # After validation, images are normalized/resized before being sent
+    # to the AI. This caps the longest edge in pixels — schedule text
+    # stays legible well below this, and it keeps vision token cost and
+    # latency bounded regardless of the original photo's resolution.
+    max_image_dimension: int = field(
+        default_factory=lambda: int(os.getenv("MAX_IMAGE_DIMENSION", "2000"))
+    )
+
+    # ------------------------------------------------------------------
     # HARDCODED — do not expose as env vars (security-critical)
     # ------------------------------------------------------------------
 
-    # Only PDF files accepted. Period.
-    allowed_extensions: tuple = ('.pdf',)
+    # PDF and phone-photo image formats accepted. Period.
+    allowed_extensions: tuple = ('.pdf', '.png', '.jpg', '.jpeg')
 
     # MIME types we accept from the browser.
     allowed_mime_types: tuple = (
         'application/pdf',
         'application/x-pdf',
         'application/octet-stream',  # some browsers send this for PDFs
+        'image/png',
+        'image/jpeg',
     )
 
-    # First 4 bytes of every valid PDF file.
+    # First bytes of every valid PDF file.
     # Cannot be faked by renaming a file or setting a MIME header.
     pdf_magic_bytes: bytes = b'%PDF'
+
+    # First bytes of every valid PNG file.
+    png_magic_bytes: bytes = b'\x89PNG\r\n\x1a\n'
+
+    # First 3 bytes of every valid JPEG file (SOI marker + APP marker start).
+    jpeg_magic_bytes: bytes = b'\xff\xd8\xff'
 
 
 # Singleton — import this everywhere rather than instantiating per request.

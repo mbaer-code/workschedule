@@ -17,6 +17,7 @@ from unittest.mock import patch, MagicMock
 from workschedule.services.pdf_parser import (
     parse_document,
     get_document_summary,
+    parse_image_with_summary,
     _is_valid_date,
     _is_valid_time,
     _is_meaningful_title,
@@ -325,6 +326,111 @@ class TestGetDocumentSummary:
         summary = get_document_summary("some pdf text")
         assert "Home Depot work schedule" in summary
         assert "(" not in summary
+
+
+MOCK_IMAGE_RESPONSE = {
+    "doc_type": "work_schedule",
+    "summary": "Photo of a Home Depot work schedule",
+    "year": "2026",
+    "subject": "Home Depot",
+    "location": "Store 0660",
+    "has_calendar_content": True,
+    "events": [
+        {"shift_date": "Mon, Sep 08", "shift_start": "9:00 AM",
+         "shift_end": "5:00 PM", "department": "Cashier", "store_number": "0660"}
+    ]
+}
+
+FAKE_JPEG_BYTES = b'\xff\xd8\xff' + b'fake-jpeg-data'
+
+
+class TestParseImage:
+    """
+    Image path uses one combined vision call (context + extraction) instead
+    of the text path's two passes, since re-sending image bytes for a
+    second pass would double vision token cost for no accuracy gain.
+    """
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_image_parsed(self, mock_client):
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(json.dumps(MOCK_IMAGE_RESPONSE))
+
+        events, summary = parse_image_with_summary(FAKE_JPEG_BYTES, media_type="image/jpeg")
+
+        assert len(events) == 1
+        assert events[0]['department'] == 'Cashier'
+        assert "Home Depot" in summary
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_image_makes_single_api_call(self, mock_client):
+        """Confirms the cost-saving design: one vision call, not two."""
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(json.dumps(MOCK_IMAGE_RESPONSE))
+
+        parse_image_with_summary(FAKE_JPEG_BYTES, media_type="image/jpeg")
+
+        assert client.messages.create.call_count == 1
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_image_sends_vision_content_block(self, mock_client):
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(json.dumps(MOCK_IMAGE_RESPONSE))
+
+        parse_image_with_summary(FAKE_JPEG_BYTES, media_type="image/png")
+
+        _, kwargs = client.messages.create.call_args
+        content = kwargs['messages'][0]['content']
+        image_blocks = [b for b in content if b.get('type') == 'image']
+        assert len(image_blocks) == 1
+        assert image_blocks[0]['source']['media_type'] == 'image/png'
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_image_no_calendar_content_returns_empty(self, mock_client):
+        client = MagicMock()
+        mock_client.return_value = client
+        no_cal = {**MOCK_IMAGE_RESPONSE, "has_calendar_content": False, "events": []}
+        client.messages.create.return_value = _mock_response(json.dumps(no_cal))
+
+        events, summary = parse_image_with_summary(FAKE_JPEG_BYTES)
+        assert events == []
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_image_api_failure_returns_empty(self, mock_client):
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.side_effect = Exception("API timeout")
+
+        events, summary = parse_image_with_summary(FAKE_JPEG_BYTES)
+        assert events == []
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_image_garbage_events_filtered(self, mock_client):
+        client = MagicMock()
+        mock_client.return_value = client
+        response = {
+            **MOCK_IMAGE_RESPONSE,
+            "events": [
+                {"shift_date": "1.4", "shift_start": "9:00 AM",
+                 "shift_end": "5:00 PM", "department": "Work", "store_number": ""},
+                {"shift_date": "Mon, Sep 08", "shift_start": "9:00 AM",
+                 "shift_end": "5:00 PM", "department": "Cashier", "store_number": ""},
+            ]
+        }
+        client.messages.create.return_value = _mock_response(json.dumps(response))
+
+        events, _ = parse_image_with_summary(FAKE_JPEG_BYTES)
+        assert len(events) == 1
+        assert events[0]['department'] == 'Cashier'
+
+    def test_empty_bytes_returns_empty_no_api_call(self):
+        with patch('workschedule.services.pdf_parser._client') as mock_client:
+            events, summary = parse_image_with_summary(b"")
+            assert events == []
+            mock_client.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
