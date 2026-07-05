@@ -430,7 +430,7 @@ def download_ics(token):
     _delete_from_gcs(ics_blob_path)
 
     now = datetime.datetime.now().strftime('%Y%m%d_%H%M')
-    filename = f"myschedule.cloud_{now}.ics"
+    filename = f"myschedule.cloud{now}.ics"
     response = Response(ics_content, mimetype="text/calendar")
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
