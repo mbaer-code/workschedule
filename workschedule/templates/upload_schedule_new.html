@@ -77,10 +77,12 @@
             <div class="custom-file-input" id="drop-zone">
                 <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf,image/png,image/jpeg,image/heic,image/heif" required>
                 <span class="custom-file-input-text">Click or drag a PDF or photo of your schedule here</span>
-                {% if pdf_error %}
-                <div class="text-red-600 text-sm mt-1">{{ pdf_error }}</div>
-                {% endif %}
             </div>
+            {% if pdf_error %}
+            <div class="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-3">
+                {{ pdf_error }}
+            </div>
+            {% endif %}
 
             <button type="submit"
                 class="w-full bg-sky-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-sky-700 transition-colors duration-300 text-lg">
