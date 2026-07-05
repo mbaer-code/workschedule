@@ -27,8 +27,12 @@
                         {% for item in parsed_schedule %}
                         <tr class="hover:bg-gray-50">
                             <td class="py-2 px-4 text-sm">{{ item.get('shift_date', 'N/A') }}</td>
+                            {% if item.get('shift_start') or item.get('shift_end') %}
                             <td class="py-2 px-4 text-sm">{{ item.get('shift_start', 'N/A') }}</td>
                             <td class="py-2 px-4 text-sm">{{ item.get('shift_end', 'N/A') }}</td>
+                            {% else %}
+                            <td class="py-2 px-4 text-sm text-gray-500 italic" colspan="2">All day</td>
+                            {% endif %}
                             <td class="py-2 px-4 text-sm">{{ item.get('department', 'N/A') }}</td>
                             <td class="py-2 px-4 text-sm">{{ item.get('store_number') if item.get('store_number') and item.get('store_number') != 'N/A' else '—' }}</td>
                         </tr>
