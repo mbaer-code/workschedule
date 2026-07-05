@@ -75,6 +75,21 @@ def create_app():
     from workschedule.routes.schedule import schedule_bp
     app.register_blueprint(schedule_bp)
 
+    # NOTE: auth_bp (login/signup/Firebase session auth) has been archived —
+    # see workschedule/routes/_archived/auth.py.bak. It depended entirely on
+    # Firebase Admin SDK verification, which is no longer in use. Every route
+    # in it either called Firebase directly or was gated by a login_required
+    # decorator that checked a session key only Firebase auth ever set — so
+    # none of it functioned even when the blueprint was (recently, briefly)
+    # registered.
+    #
+    # One route in that blueprint had no Firebase dependency at all —
+    # /auth/upload_schedule, a plain form page — so it's preserved here
+    # standalone rather than lost along with the rest.
+    @app.route('/auth/upload_schedule')
+    def auth_upload_schedule_page():
+        return render_template('auth/upload_schedule.html')
+
     # Print registered routes for debugging
     print("\n[DEBUG] Registered routes:")
     for rule in app.url_map.iter_rules():
