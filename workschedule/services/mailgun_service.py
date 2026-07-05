@@ -87,7 +87,7 @@ def send_receipt_with_ics(to_email, customer_name, shifts_data, ics_content):
     
     # Generate timestamped filename first
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"work_schedule_{timestamp}.ics"
+    filename = f"myschedule.cloud_{timestamp}.ics"
     
     # Create calendar import URLs
     # Google Calendar - use mobile web version that bypasses app
