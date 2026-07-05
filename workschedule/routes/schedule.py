@@ -196,7 +196,19 @@ def upload_schedule():
 @schedule_bp.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
     if 'pdfFile' not in request.files:
-        return redirect(url_for('schedule_bp.upload_schedule'))
+        logger.warning(
+            "[upload_pdf] No 'pdfFile' field in request.files -- the "
+            "browser's upload never included a file. form keys: "
+            f"{list(request.form.keys())}, files keys: {list(request.files.keys())}"
+        )
+        return render_template(
+            "upload_schedule_new.html",
+            pdf_error=(
+                "Your file didn't upload. If it's a photo from your library, "
+                "wait a moment for it to fully download from iCloud/cloud "
+                "storage, then try again."
+            ),
+        )
 
     pdf_file = request.files['pdfFile']
     timezone = request.form.get('timezone', 'America/Los_Angeles')
@@ -208,8 +220,14 @@ def upload_pdf():
     try:
         pdf_contents = pdf_file.read()
     except Exception as e:
-        logger.error(f"Error reading uploaded file: {e}")
-        return redirect(url_for('schedule_bp.upload_schedule'))
+        logger.error(f"[upload_pdf] Error reading uploaded file bytes: {e}")
+        return render_template(
+            "upload_schedule_new.html",
+            pdf_error=(
+                "We couldn't read your file -- the upload may have been "
+                "interrupted. Please try again."
+            ),
+        )
 
     # --- Security gate (fast, free, runs before any API call) ---
     # kind is detected from magic bytes, not the filename/MIME the browser
