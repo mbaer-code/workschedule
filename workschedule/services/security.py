@@ -143,10 +143,8 @@ def _check_file_size(data: bytes, kind: str):
             mb = limits.max_image_size_bytes // (1024 * 1024)
             logger.warning(f"[security] Image too large: {size} bytes")
             raise SecurityError(
-                f"That photo is too large (over {mb}MB). Try taking a new "
-                f"photo at your camera's default settings rather than a "
-                f"'Pro'/RAW/high-res mode, or send a screenshot of the "
-                f"schedule instead."
+                f"That photo is too large (over {mb}MB). Take a screenshot "
+                f"of it and upload that instead."
             )
     else:
         if size < limits.min_file_size_bytes:
@@ -186,11 +184,8 @@ def _check_image_dimensions(data: bytes):
     if pixels > limits.max_image_pixels:
         logger.warning(f"[security] Image dimensions too large: {width}x{height} = {pixels} px")
         raise SecurityError(
-            "That photo's resolution is too high for us to process. "
-            "Easiest fix: open the photo, take a screenshot of it, and "
-            "upload the screenshot instead — screenshots are always a "
-            "manageable size. Alternatively, lower your camera's photo "
-            "resolution in your phone's Camera settings before retaking it."
+            "That photo's resolution is too high. Take a screenshot of it "
+            "and upload that instead."
         )
     if width <= 0 or height <= 0:
         raise SecurityError("The image file appears to be corrupted.")
