@@ -3,32 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MySchedule.cloud — Turn Any Schedule into a Calendar File</title>
-    <meta name="description" content="Turn your work schedule — a PDF or a photo — into a calendar file you can add to your phone in minutes. Nothing to install, no account needed.">
-    <meta property="og:title" content="MySchedule.cloud — Turn Any Schedule into a Calendar File">
-    <meta property="og:description" content="Turn your work schedule — a PDF or a photo — into a calendar file you can add to your phone in minutes. Nothing to install, no account needed.">
+    <title>MySchedule.cloud &mdash; Turn Any Schedule Photo or File into a Calendar</title>
+    <meta name="description" content="Snap a photo or upload a schedule file to instantly get a clean calendar file for your phone. No apps to install, no account required.">
+    <meta property="og:title" content="MySchedule.cloud &mdash; Turn Any Schedule Photo or File into a Calendar">
+    <meta property="og:description" content="Snap a photo or upload a schedule file to instantly get a clean calendar file for your phone. No apps to install, no account required.">
     <meta property="og:type" content="website">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f0f4f8;
-            color: #334155;
         }
     </style>
 </head>
-<body class="bg-gray-50 antialiased">
+<body class="bg-slate-50 text-slate-800 antialiased">
 
     <!-- Navigation Bar -->
-    <header class="bg-white sticky top-0 z-50">
+    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100">
         <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="text-2xl font-bold text-sky-600">
-                MySchedule.cloud
+            <div class="text-xl font-black tracking-tight text-sky-600">
+                MySchedule<span class="text-slate-400">.cloud</span>
             </div>
             <div class="flex items-center space-x-6">
-                <a href="#about-us" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">About Us</a>
-                <a href="/schedule/upload" class="bg-sky-600 text-white px-5 py-2 rounded-full font-semibold hover:bg-sky-700 transition-colors duration-300">
-                    Upload
+                <a href="#about-us" class="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors">About</a>
+                <a href="/schedule/upload" class="bg-sky-600 text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-sky-700 transition-all shadow-sm hover:shadow">
+                    Upload or Take Photo
                 </a>
             </div>
         </nav>
@@ -37,145 +35,137 @@
     <main id="app-container">
         <!-- Landing Page Content -->
         <div id="landing-page" class="active-content">
+            
             <!-- Hero Section -->
-            <section class="bg-sky-600 text-white py-16 text-center rounded-b-3xl">
-                <div class="container mx-auto px-6">
-                    <h1 class="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight">
-                        Extract Calendar Events from Any Schedule
+            <section class="bg-gradient-to-b from-sky-600 to-sky-700 text-white py-20 text-center rounded-b-[2rem] shadow-md">
+                <div class="container mx-auto px-6 max-w-4xl">
+                    <h1 class="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight leading-tight">
+                        Turn Any Schedule Photo or File <br class="hidden md:inline">into a Calendar File
                     </h1>
-                    <p class="text-lg md:text-xl font-normal leading-relaxed opacity-90 mb-8 max-w-2xl mx-auto">
-                        Got a PDF or photo with dates buried inside it? Upload it here. We'll find the dates and give you a clean <code class="bg-sky-700/50 px-1.5 py-0.5 rounded font-mono text-sm">.ics</code> file to drop straight into your calendar.
+                    <p class="text-lg md:text-xl font-normal leading-relaxed text-sky-50 mb-8 max-w-2xl mx-auto">
+                        Snap a photo of a printed roster, upload a screenshot, or drop in a document. Our AI finds your shifts instantly and gives you a standard <code class="bg-sky-800/60 px-2 py-0.5 rounded font-mono text-sm border border-sky-500/30">.ics</code> file to sync straight to your iPhone, Android, or Google Calendar.
                     </p>
-                    <p class="text-lg md:text-xl font-normal leading-relaxed opacity-90 mb-8 max-w-2xl mx-auto">
-                        And there's a <strong>FREE Coupon</strong>!    At checkout just click <strong>Add Code</strong> and type <strong>FREE</strong> and its absolutely free.
-                    </p>
+                    
+                    <!-- Formats Badge Row -->
+                    <div class="flex flex-wrap justify-center gap-2 mb-8 max-w-lg mx-auto text-xs font-mono text-sky-200">
+                        <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">📷 Direct Camera Photo</span>
+                        <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">HEIC (iPhone)</span>
+                        <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">JPEG / JPG</span>
+                        <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">PNG</span>
+                        <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">PDF</span>
+                    </div>
+
+                    <div class="inline-flex items-center gap-3 bg-sky-800/40 border border-sky-400/20 px-4 py-2 rounded-full text-sm font-medium text-sky-100">
+                        <span class="bg-amber-400 text-slate-900 text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Limited Time</span>
+                        <span>Use checkout code <strong class="text-white font-bold underline">FREE</strong> for a 100% complimentary export.</span>
+                    </div>
                 </div>
             </section>
 
-
             <!-- Works With Section -->
-            <section class="py-16 bg-white">
+            <section class="py-20 bg-white">
                 <div class="container mx-auto px-6">
-                    <h2 class="text-3xl font-bold text-center mb-3 text-gray-800">Built for schedules from any source</h2>
-                    <p class="text-center text-gray-500 mb-10 max-w-xl mx-auto">If it has dates and comes as a PDF or a photo, it's built to work — no matter which system produced it.</p>
+                    <div class="text-center max-w-xl mx-auto mb-16">
+                        <h2 class="text-3xl font-bold tracking-tight text-slate-900 mb-4">Built for messy, real-world schedules</h2>
+                        <p class="text-slate-500 leading-relaxed">Whether it's a blurry printout on the break-room wall, a text message screenshot, or a digital document, our engine reads it cleanly.</p>
+                    </div>
 
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
                         <!-- Workplace -->
-                        <div class="bg-sky-50 rounded-2xl p-5">
-                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Workplace</h3>
-                            <ul class="text-sm text-gray-600 space-y-1">
-                                <li>Shift schedules</li>
-                                <li>On-call rotations</li>
-                                <li>Printed break-room schedules</li>
-                                <li>Timesheets</li>
+                        <div class="border border-slate-100 bg-slate-50/50 rounded-2xl p-6 transition-all hover:shadow-sm">
+                            <h3 class="font-bold text-sky-700 text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span class="p-1.5 bg-sky-100 text-sky-700 rounded-lg">💼</span> Workplace & Gig
+                            </h3>
+                            <ul class="text-sm text-slate-600 space-y-2.5">
+                                <li class="flex items-center gap-2">📸 Snapped photos of break-room walls</li>
+                                <li class="flex items-center gap-2">📱 Screenshots of app dispatch screens</li>
+                                <li class="flex items-center gap-2">⏱️ Dynamic gig and driving shift blocks</li>
+                                <li class="flex items-center gap-2">📋 Rotations, timetables, and logs</li>
                             </ul>
                         </div>
 
                         <!-- Healthcare -->
-                        <div class="bg-sky-50 rounded-2xl p-5">
-                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Healthcare</h3>
-                            <ul class="text-sm text-gray-600 space-y-1">
-                                <li>Appointment schedules</li>
-                                <li>PT / rehab schedules</li>
-                                <li>Treatment plans</li>
-                                <li>Recurring visit schedules</li>
+                        <div class="border border-slate-100 bg-slate-50/50 rounded-2xl p-6 transition-all hover:shadow-sm">
+                            <h3 class="font-bold text-sky-700 text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span class="p-1.5 bg-sky-100 text-sky-700 rounded-lg">🩺</span> Healthcare
+                            </h3>
+                            <ul class="text-sm text-slate-600 space-y-2.5">
+                                <li class="flex items-center gap-2">🏥 Printouts of on-call rotations</li>
+                                <li class="flex items-center gap-2">🗓️ Photos of multi-day clinic sheets</li>
+                                <li class="flex items-center gap-2">🔄 Physical therapy and rehab flyers</li>
+                                <li class="flex items-center gap-2">🩺 Appointment cards and records</li>
                             </ul>
                         </div>
 
-                        <!-- Education -->
-                        <div class="bg-sky-50 rounded-2xl p-5">
-                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Education</h3>
-                            <ul class="text-sm text-gray-600 space-y-1">
-                                <li>Syllabi</li>
-                                <li>Exam schedules</li>
-                                <li>Academic calendars</li>
-                                <li>Assignment due dates</li>
+                        <!-- Education & Life -->
+                        <div class="border border-slate-100 bg-slate-50/50 rounded-2xl p-6 transition-all hover:shadow-sm">
+                            <h3 class="font-bold text-sky-700 text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span class="p-1.5 bg-sky-100 text-sky-700 rounded-lg">🎓</span> Education & Life
+                            </h3>
+                            <ul class="text-sm text-slate-600 space-y-2.5">
+                                <li class="flex items-center gap-2">📖 Images of course syllabi timelines</li>
+                                <li class="flex items-center gap-2">📝 Printed final exam schedules</li>
+                                <li class="flex items-center gap-2">⏳ Variable school or sports calendars</li>
+                                <li class="flex items-center gap-2">🗓️ Any text or table showing dates</li>
                             </ul>
                         </div>
-
-                        <!-- Legal & Finance -->
-                        <div class="bg-sky-50 rounded-2xl p-5">
-                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Legal &amp; Finance</h3>
-                            <ul class="text-sm text-gray-600 space-y-1">
-                                <li>Court notices</li>
-                                <li>Lease deadlines</li>
-                                <li>Contract milestones</li>
-                                <li>Tax deadlines</li>
-                            </ul>
-                        </div>
-
-                        <!-- Construction -->
-                        <div class="bg-sky-50 rounded-2xl p-5">
-                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Construction</h3>
-                            <ul class="text-sm text-gray-600 space-y-1">
-                                <li>Inspection timelines</li>
-                                <li>Permit deadlines</li>
-                                <li>Draw schedules</li>
-                                <li>Subcontractor schedules</li>
-                            </ul>
-                        </div>
-
-                        <!-- Project Management -->
-                        <div class="bg-sky-50 rounded-2xl p-5">
-                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Project Mgmt</h3>
-                            <ul class="text-sm text-gray-600 space-y-1">
-                                <li>Gantt chart exports</li>
-                                <li>Sprint calendars</li>
-                                <li>Project milestones</li>
-                                <li>Task deadlines</li>
-                            </ul>
-                        </div>
-
                     </div>
                 </div>
             </section>
 
-            <section id="privacy" class="py-16 bg-sky-600 text-white text-center rounded-t-3xl">
-                <div class="container mx-auto px-6">
-                    <p class="text-lg md:text-xl font-bold max-w-2xl mx-auto mb-8 opacity-95">
-                        About your data
-                    </p>
+            <!-- Data & Privacy Section -->
+            <section id="privacy" class="py-20 bg-slate-100/60 border-y border-slate-200/50">
+                <div class="container mx-auto px-6 max-w-4xl">
+                    <div class="text-center mb-12">
+                        <div class="inline-block bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-3">Privacy First</div>
+                        <h2 class="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Zero Retention, Zero Tracking</h2>
+                    </div>
 
-                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 opacity-90">
-                        Files pass through temporary cloud storage just long enough to generate your calendar file — then they're vaporized the moment you download it. We don't keep logs, accounts, or a copy of anything you upload.
-                    </p>
-
-                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 opacity-90">
-                        Our credit card processor, Stripe.com, states that it does not sell your personal or financial information to marketers or unaffiliated third parties.  See their site for more details.
-                    </p>
+                    <div class="grid md:grid-cols-2 gap-8 text-left">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200/40">
+                            <h3 class="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                                🛡️ Stateless Processing
+                            </h3>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                This platform is designed as a stateless SaaS. Photos and files pass temporarily into secure, isolated cloud memory buckets solely to perform parsing computations, and are immediately vaporized. We do not keep logs, images, user profiles, or historic schedules.
+                            </p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200/40">
+                            <h3 class="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                                💳 Secure Payments
+                            </h3>
+                            <p class="text-sm text-slate-600 leading-relaxed">
+                                Financial infrastructure is entirely handled securely via Stripe. Because we hold no data on the site, your personal information is never aggregated, profile-built, or sold to third-party marketing entities.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </section>
 
             <!-- Final Call to Action Section -->
-            <section id="trial" class="py-16 bg-sky-600 text-white text-center rounded-b-3xl">
-                <div class="container mx-auto px-6">
-                    <h2 class="text-3xl md:text-4xl font-bold mb-4">Ready to bring your work schedule home?</h2>
-                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 opacity-90">
-                        Upload a PDF or photo with dates and we'll turn it into a calendar file. Use code FREE at checkout and it's on us.
+            <section id="trial" class="py-20 bg-sky-600 text-white text-center rounded-t-[2rem] shadow-inner">
+                <div class="container mx-auto px-6 max-w-2xl">
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4 tracking-tight">Ready to sync your schedule?</h2>
+                    <p class="text-lg text-sky-100 mb-8 leading-relaxed">
+                        Snap a picture or upload a file right now, generate your calendar, and stop typing events manually. Remember to use code <strong class="text-white font-bold underline">FREE</strong> at checkout.
                     </p>
-                        <a href="/schedule/upload" class="bg-white text-sky-600 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition-colors duration-300 transform hover:scale-105">
-                            Try It FREE Today
-                        </a>
-                    </div>
+                    <a href="/schedule/upload" class="inline-block bg-white text-sky-600 font-bold py-3.5 px-8 rounded-full shadow-lg hover:bg-slate-50 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
+                        Try It Free Right Now
+                    </a>
+                </div>
             </section>
 
             <!-- About Us Section -->
-            <section id="about-us" class="py-16 bg-white">
-                <div class="container mx-auto px-6 text-center">
-                    <h2 class="text-3xl font-bold mb-4 text-gray-800">About MySchedule.cloud</h2>
-                    <p class="text-gray-600 max-w-2xl mx-auto mb-8">
-                        MySchedule.cloud was created by part-time Big Box sales associates and their robot AIs to make it easier to coordinate chaotic lives with unpredictable schedules. We hope it can make things a little easier for you too.
+            <section id="about-us" class="py-16 bg-slate-900 text-slate-400 text-center">
+                <div class="container mx-auto px-6 max-w-2xl">
+                    <h2 class="text-lg font-bold text-white mb-3">About MySchedule.cloud</h2>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        MySchedule.cloud was architected by real-world service workers and smart automation tools to untangle modern scheduling nightmares. Built clean, minimal, and utility-first to return hours back to your week.
                     </p>
                 </div>
             </section>
-            
-            <!-- White space section -->
-            <section class="bg-white py-16 md:py-32"></section>
         </div>
-
     </main>
 
 </body>
 </html>
-
