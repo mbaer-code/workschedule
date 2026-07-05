@@ -21,10 +21,13 @@ from workschedule.app import create_app
 # Create the Flask application instance.
 app = create_app()
 
-# Set a secret key for session management.
-# It's best practice to load this from an environment variable for security.
-# This fixes the "RuntimeError: The session is unavailable" issue.
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your_unique_and_secret_fallback_key")
+# Session secret key is set inside create_app() (checks MAGIC_LINK_SECRET,
+# then SECRET_KEY, then FLASK_SECRET_KEY, then a dev-only fallback — in
+# that priority order). Do not set it again here: this used to overwrite
+# it with a narrower check (FLASK_SECRET_KEY only) and a hardcoded
+# fallback string, which silently downgraded session signing to a
+# checked-in-source secret any time MAGIC_LINK_SECRET or SECRET_KEY was
+# set but FLASK_SECRET_KEY wasn't.
 
 # Blueprints are registered in create_app(), do not register here.
 
