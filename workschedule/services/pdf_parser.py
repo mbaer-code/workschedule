@@ -253,6 +253,42 @@ REQUIRED_KEYS = {"shift_date", "shift_start", "shift_end", "department", "store_
 DATE_RE = re.compile(r"^(?:[A-Z][a-z]{2}, )?[A-Z][a-z]{2} \d{2}$")
 TIME_RE = re.compile(r"^\d{1,2}:\d{2} [AP]M$")   # 12-hour only, e.g. "11:30 AM"
 
+_MONTH_ABBR = {m: i for i, m in enumerate(
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], start=1)}
+
+
+def shift_date_sort_key(value: str) -> tuple:
+    """
+    Chronological sort key for shift_date strings like 'Mon, Sep 08' or
+    'Sep 08'. Sorting the raw string directly (as callers used to do)
+    scrambles the order whenever a weekday prefix is present, since it
+    then sorts primarily by weekday name alphabetically (Fri, Mon, Sat,
+    Sun, Thu, Tue, Wed) rather than by date.
+
+    Returns a (month, day) tuple. Malformed values sort last rather than
+    raising, so one bad entry doesn't break sorting the rest.
+
+    Note: shift_date carries no year, so this assumes a single year per
+    document — correct for the vast majority of real schedules (a few
+    weeks or a semester), but a schedule spanning a year boundary
+    (e.g. late Dec into early Jan) would still sort Jan before Dec.
+    """
+    if not value or not isinstance(value, str):
+        return (99, 99)
+    parts = value.strip().split(', ')[-1].split()  # drop optional weekday prefix
+    if len(parts) != 2:
+        return (99, 99)
+    month_str, day_str = parts
+    month = _MONTH_ABBR.get(month_str)
+    if month is None:
+        return (99, 99)
+    try:
+        day = int(day_str)
+    except ValueError:
+        return (99, 99)
+    return (month, day)
+
 
 def _is_valid_date(value, year: str) -> bool:
     """Return True if value looks like a real calendar date string."""

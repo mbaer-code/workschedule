@@ -21,6 +21,7 @@ from workschedule.services.parser_limits import limits
 from workschedule.services.pdf_parser import (
     parse_document_with_summary,
     parse_image_with_summary,
+    shift_date_sort_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -251,8 +252,10 @@ def upload_pdf():
                                    doc_summary=doc_summary,
                                    raw_json="No calendar events found in this document.")
 
-        # Sort by date
-        parsed_entries.sort(key=lambda x: x.get('shift_date', ''))
+        # Sort by date (chronologically — sorting the raw string scrambles
+        # order since it starts with the weekday name, e.g. "Wed, Sep 11"
+        # sorts before "Fri, Sep 13" alphabetically by weekday, not date)
+        parsed_entries.sort(key=lambda x: shift_date_sort_key(x.get('shift_date', '')))
 
         # Persist to GCS
         job_id = str(uuid.uuid4())

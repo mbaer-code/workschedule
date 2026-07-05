@@ -18,6 +18,7 @@ from workschedule.services.pdf_parser import (
     parse_document,
     get_document_summary,
     parse_image_with_summary,
+    shift_date_sort_key,
     _is_valid_date,
     _is_valid_time,
     _is_meaningful_title,
@@ -431,6 +432,45 @@ class TestParseImage:
             events, summary = parse_image_with_summary(b"")
             assert events == []
             mock_client.assert_not_called()
+
+
+class TestShiftDateSortKey:
+    """
+    Regression coverage for a real bug: sorting shift_date strings
+    directly (e.g. 'Wed, Sep 11') sorts by weekday name alphabetically
+    since that's the start of the string, scrambling actual date order.
+    """
+
+    def test_with_weekday_prefix_sorts_chronologically(self):
+        dates = ["Mon, Mar 02", "Tue, Mar 03", "Sun, Mar 08",
+                 "Mon, Mar 09", "Wed, Mar 11", "Thu, Mar 12"]
+        result = sorted(dates, key=shift_date_sort_key)
+        assert result == ["Mon, Mar 02", "Tue, Mar 03", "Sun, Mar 08",
+                           "Mon, Mar 09", "Wed, Mar 11", "Thu, Mar 12"]
+
+    def test_raw_string_sort_would_scramble_this(self):
+        """Confirms the bug this fix addresses actually existed."""
+        dates = ["Mon, Mar 02", "Tue, Mar 03", "Sun, Mar 08",
+                 "Mon, Mar 09", "Wed, Mar 11", "Thu, Mar 12"]
+        naive_sort = sorted(dates)
+        chronological = sorted(dates, key=shift_date_sort_key)
+        assert naive_sort != chronological
+
+    def test_without_weekday_prefix(self):
+        dates = ["Sep 08", "Sep 03", "Sep 15"]
+        result = sorted(dates, key=shift_date_sort_key)
+        assert result == ["Sep 03", "Sep 08", "Sep 15"]
+
+    def test_across_months(self):
+        dates = ["Oct 02", "Sep 30", "Nov 01"]
+        result = sorted(dates, key=shift_date_sort_key)
+        assert result == ["Sep 30", "Oct 02", "Nov 01"]
+
+    def test_malformed_sorts_last_not_raises(self):
+        dates = ["Sep 08", "garbage", "", None, "Sep 03"]
+        result = sorted(dates, key=shift_date_sort_key)
+        assert result[0] == "Sep 03"
+        assert result[1] == "Sep 08"
 
 
 # ---------------------------------------------------------------------------
