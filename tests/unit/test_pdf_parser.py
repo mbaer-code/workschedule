@@ -176,9 +176,9 @@ def _mock_response(text: str) -> MagicMock:
 
 MOCK_CONTEXT = {
     "doc_type": "work_schedule",
-    "summary": "Home Depot work schedule for September 2025",
+    "summary": "Acme Home Improvement work schedule for September 2025",
     "year": "2025",
-    "subject": "Home Depot",
+    "subject": "Acme Home Improvement",
     "location": "Store 0660",
     "has_calendar_content": True
 }
@@ -314,7 +314,7 @@ class TestGetDocumentSummary:
         mock_client.return_value = client
         client.messages.create.return_value = _mock_response(json.dumps(MOCK_CONTEXT))
         summary = get_document_summary("some pdf text")
-        assert "Home Depot" in summary
+        assert "Acme Home Improvement" in summary
         assert "0660" in summary
 
     @patch('workschedule.services.pdf_parser._client')
@@ -324,15 +324,15 @@ class TestGetDocumentSummary:
         ctx = {**MOCK_CONTEXT, "subject": None, "location": None}
         client.messages.create.return_value = _mock_response(json.dumps(ctx))
         summary = get_document_summary("some pdf text")
-        assert "Home Depot work schedule" in summary
+        assert "Acme Home Improvement work schedule" in summary
         assert "(" not in summary
 
 
 MOCK_IMAGE_RESPONSE = {
     "doc_type": "work_schedule",
-    "summary": "Photo of a Home Depot work schedule",
+    "summary": "Photo of an Acme Home Improvement work schedule",
     "year": "2026",
-    "subject": "Home Depot",
+    "subject": "Acme Home Improvement",
     "location": "Store 0660",
     "has_calendar_content": True,
     "events": [
@@ -361,7 +361,7 @@ class TestParseImage:
 
         assert len(events) == 1
         assert events[0]['department'] == 'Cashier'
-        assert "Home Depot" in summary
+        assert "Acme Home Improvement" in summary
 
     @patch('workschedule.services.pdf_parser._client')
     def test_image_makes_single_api_call(self, mock_client):
@@ -444,7 +444,7 @@ class TestParseImage:
 class TestLiveIntegration:
 
     SAMPLE_SCHEDULE = """
-    Home Depot Work Schedule - Store 0660
+    Acme Home Improvement Work Schedule - Store 0660
     September 2025
 
     Wed Sep 11   11:30 AM - 8:00 PM   Plumbing & Bath Associate
