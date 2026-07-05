@@ -38,6 +38,26 @@ from workschedule.services.parser_limits import limits
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Optional HEIC/HEIF support
+# ---------------------------------------------------------------------------
+# Registered once here at import time, not per-request. If pillow-heif's
+# native library is unavailable or incompatible with the deployment
+# environment, we must NOT let that take down PNG/JPEG uploads too --
+# every image upload, regardless of format, goes through the same
+# dimension-check code path below. Catching broadly (not just ImportError)
+# is deliberate: a native-library mismatch can surface as OSError,
+# RuntimeError, or other exception types depending on platform.
+try:
+    from PIL import Image
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    _HEIF_SUPPORT = True
+except Exception as e:  # noqa: BLE001
+    logger.error(f"[security] pillow-heif unavailable, HEIC/HEIF support disabled: {e}")
+    from PIL import Image
+    _HEIF_SUPPORT = False
+
 
 # ---------------------------------------------------------------------------
 # Custom exception
@@ -166,18 +186,15 @@ def _check_image_dimensions(data: bytes):
     cheap even for a maliciously crafted file.
     """
     try:
-        from PIL import Image
-        import pillow_heif
-        pillow_heif.register_heif_opener()
-    except ImportError:
-        logger.error("[security] Pillow not installed — cannot validate image dimensions")
-        raise SecurityError("Image validation is temporarily unavailable. Please try a PDF instead.")
-
-    try:
         with Image.open(BytesIO(data)) as img:
             width, height = img.size
     except Exception as e:
         logger.warning(f"[security] Could not read image header: {e}")
+        if not _HEIF_SUPPORT:
+            raise SecurityError(
+                "Photo processing is temporarily limited. Please try a PDF, "
+                "or a PNG/JPEG image instead."
+            )
         raise SecurityError("The image file appears to be corrupted.")
 
     pixels = width * height

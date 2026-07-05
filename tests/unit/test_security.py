@@ -80,3 +80,28 @@ class TestHeicFullPipeline:
             mimetype='image/heic',
         )
         assert kind == 'image'
+
+
+class TestGracefulDegradationWithoutHeif:
+    """
+    Regression test for the production bug where HEIF registration ran on
+    every single image request (not just HEIC ones) and wasn't guarded
+    broadly enough -- a pillow-heif failure could take down PNG/JPEG
+    uploads too. Simulates that failure mode via monkeypatch and confirms
+    normal image types are unaffected.
+    """
+
+    def test_png_upload_unaffected_when_heif_support_disabled(self, monkeypatch):
+        import workschedule.services.security as security_module
+        monkeypatch.setattr(security_module, '_HEIF_SUPPORT', False)
+
+        png_buf = io.BytesIO()
+        from PIL import Image
+        Image.new('RGB', (400, 400), color='green').save(png_buf, format='PNG')
+
+        kind = check_upload(
+            file_bytes=png_buf.getvalue(),
+            filename='screenshot.png',
+            mimetype='image/png',
+        )
+        assert kind == 'image'

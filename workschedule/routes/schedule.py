@@ -154,9 +154,12 @@ def prepare_image_for_ai(image_bytes: bytes) -> bytes:
 
     Raises ValueError if the image can't be decoded.
     """
+    # HEIF opener registration happens once at import time in
+    # workschedule.services.security (already imported above), which runs
+    # before this function is ever called. No need to repeat it per-request
+    # -- doing so previously meant a native-library issue here could crash
+    # every image upload, not just HEIC ones.
     from PIL import Image
-    import pillow_heif
-    pillow_heif.register_heif_opener()
 
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:
