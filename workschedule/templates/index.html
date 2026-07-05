@@ -15,27 +15,6 @@
             background-color: #f0f4f8;
             color: #334155;
         }
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-        }
     </style>
 </head>
 <body class="bg-gray-50 antialiased">
@@ -48,8 +27,6 @@
             </div>
             <div class="flex items-center space-x-6">
                 <a href="#about-us" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">About Us</a>
-                <a id="auth-link" href="#" class="text-gray-600 hover:text-sky-600 transition-colors duration-300">
-                </a>
                 <a href="/schedule/upload" class="bg-sky-600 text-white px-5 py-2 rounded-full font-semibold hover:bg-sky-700 transition-colors duration-300">
                     Upload
                 </a>
@@ -76,6 +53,102 @@
                 </div>
             </section>
 
+
+            <!-- Works With Section -->
+            <section class="py-16 bg-white">
+                <div class="container mx-auto px-6">
+                    <h2 class="text-3xl font-bold text-center mb-3 text-gray-800">Works with schedules from any source</h2>
+                    <p class="text-center text-gray-500 mb-10 max-w-xl mx-auto">If it has dates and comes as a PDF or a photo, we can convert it.</p>
+
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+
+                        <!-- Workplace -->
+                        <div class="bg-sky-50 rounded-2xl p-5">
+                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Workplace</h3>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>ADP / Kronos</li>
+                                <li>When I Work</li>
+                                <li>HotSchedules</li>
+                                <li>Workforce.com</li>
+                                <li>7shifts</li>
+                                <li>Homebase</li>
+                                <li>Sling</li>
+                            </ul>
+                        </div>
+
+                        <!-- Healthcare -->
+                        <div class="bg-sky-50 rounded-2xl p-5">
+                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Healthcare</h3>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>MyChart</li>
+                                <li>Epic</li>
+                                <li>Cerner</li>
+                                <li>PT schedules</li>
+                                <li>Chemo schedules</li>
+                                <li>Dialysis schedules</li>
+                                <li>Treatment plans</li>
+                            </ul>
+                        </div>
+
+                        <!-- Education -->
+                        <div class="bg-sky-50 rounded-2xl p-5">
+                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Education</h3>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>Canvas</li>
+                                <li>Blackboard</li>
+                                <li>Google Classroom</li>
+                                <li>Moodle</li>
+                                <li>Syllabi</li>
+                                <li>Exam schedules</li>
+                                <li>Academic calendars</li>
+                            </ul>
+                        </div>
+
+                        <!-- Legal & Finance -->
+                        <div class="bg-sky-50 rounded-2xl p-5">
+                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Legal &amp; Finance</h3>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>Court notices</li>
+                                <li>Lease agreements</li>
+                                <li>Settlement deadlines</li>
+                                <li>Tax deadlines</li>
+                                <li>HOA notices</li>
+                                <li>Contract milestones</li>
+                                <li>Jury duty notices</li>
+                            </ul>
+                        </div>
+
+                        <!-- Construction -->
+                        <div class="bg-sky-50 rounded-2xl p-5">
+                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Construction</h3>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>Buildertrend</li>
+                                <li>PlanGrid</li>
+                                <li>CoConstruct</li>
+                                <li>Inspection timelines</li>
+                                <li>Draw schedules</li>
+                                <li>Permit timelines</li>
+                                <li>Subcontractor schedules</li>
+                            </ul>
+                        </div>
+
+                        <!-- Project Management -->
+                        <div class="bg-sky-50 rounded-2xl p-5">
+                            <h3 class="font-bold text-sky-700 text-sm uppercase tracking-wide mb-3">Project Mgmt</h3>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>MS Project</li>
+                                <li>Primavera P6</li>
+                                <li>Smartsheet</li>
+                                <li>Asana</li>
+                                <li>Monday.com</li>
+                                <li>Gantt exports</li>
+                                <li>Sprint calendars</li>
+                            </ul>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
 
             <!-- Features Section: The 4-Step Process -->
             <section id="features" class="py-16 bg-gray-100">
@@ -181,115 +254,7 @@
             <section class="bg-white py-16 md:py-32"></section>
         </div>
 
-        <!-- Dashboard Content -->
-        <div id="dashboard" class="hidden">
-            <section class="py-16 md:py-24 text-center">
-                <div class="container mx-auto px-6">
-                    <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold mb-4 leading-tight text-sky-600">
-                        Welcome to your dashboard!
-                    </h1>
-                    <p class="text-lg md:text-xl max-w-2xl mx-auto mb-8 text-gray-700">
-                        This is your space to manage your cloud schedule.
-                    </p>
-                    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-2xl mx-auto">
-                        <p class="text-gray-600">Your schedule and settings will appear here. For now, you can feel confident that you're logged in and ready to go.</p>
-                        <p class="mt-4 text-sm text-gray-500">
-                            You'll be able to manage your uploads and calendar connections here soon.
-                        </p>
-                    </div>
-                </div>
-            </section>
-        </div>
     </main>
-
-    <!-- Login Modal -->
-    <div id="login-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h2 class="text-2xl font-bold mb-6 text-gray-800">Log In to Your Account</h2>
-            <form id="login-form" class="space-y-4">
-                <div>
-                    <input type="email" id="email" placeholder="Email Address" class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500" required>
-                </div>
-                <div>
-                    <input type="password" id="password" placeholder="Password" class="w-full px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500" required>
-                </div>
-                <button type="submit" class="w-full bg-sky-600 text-white font-bold py-3 px-6 rounded-full hover:bg-sky-700 transition-colors duration-300">
-                    Log In
-                </button>
-            </form>
-            <p id="login-error-message" class="text-red-500 text-sm mt-4 hidden">Invalid email or password.</p>
-        </div>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const authLink = document.getElementById('auth-link');
-            const landingPage = document.getElementById('landing-page');
-            const dashboard = document.getElementById('dashboard');
-            const loginModal = document.getElementById('login-modal');
-            const loginForm = document.getElementById('login-form');
-            const loginErrorMessage = document.getElementById('login-error-message');
-            const fileUploadInput = document.getElementById('file-upload');
-            const uploadButton = document.getElementById('nav-upload-link');
-
-            // Event listener for the new "Upload" button in the nav bar
-            uploadButton.addEventListener('click', (e) => {
-                e.preventDefault();
-                fileUploadInput.click();
-            });
-
-            const checkAuthStatus = () => {
-                const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-                if (isLoggedIn) {
-                    showDashboard();
-                } else {
-                    showLandingPage();
-                }
-            };
-
-            const showLandingPage = () => {
-               landingPage.classList.remove('hidden');
-               dashboard.classList.add('hidden');
-               authLink.textContent = 'Log In / Sign Up';
-               authLink.onclick = () => loginModal.style.display = 'flex';
-            };
-
-            const showDashboard = () => {
-                landingPage.classList.add('hidden');
-                dashboard.classList.remove('hidden');
-                authLink.textContent = 'Log Out';
-                authLink.onclick = () => {
-                    localStorage.removeItem('isLoggedIn');
-                    checkAuthStatus();
-                };
-            };
-
-            // Login form submission handler
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-
-                // Simple hardcoded login for demonstration
-                if (password === 'test') {
-                    localStorage.setItem('isLoggedIn', 'true');
-                    loginModal.style.display = 'none';
-                    checkAuthStatus();
-                } else {
-                    loginErrorMessage.classList.remove('hidden');
-                }
-            });
-
-            // Hide modal on outside click
-            loginModal.addEventListener('click', (e) => {
-                if (e.target === loginModal) {
-                    loginModal.style.display = 'none';
-                }
-            });
-
-            checkAuthStatus();
-        });
-    </script>
 
 </body>
 </html>
