@@ -125,6 +125,9 @@ def _detect_kind(data: bytes) -> str:
         return "image"
     if data.startswith(limits.jpeg_magic_bytes):
         return "image"
+    # HEIC/HEIF: bytes 4-8 are the "ftyp" box marker, bytes 8-12 are the brand.
+    if len(data) >= 12 and data[4:8] == b'ftyp' and data[8:12] in limits.heic_ftyp_brands:
+        return "image"
     logger.warning("[security] File failed magic bytes check — unrecognized format")
     raise SecurityError(
         "The file does not appear to be a valid PDF, PNG, or JPEG."
@@ -163,6 +166,8 @@ def _check_image_dimensions(data: bytes):
     """
     try:
         from PIL import Image
+        import pillow_heif
+        pillow_heif.register_heif_opener()
     except ImportError:
         logger.error("[security] Pillow not installed — cannot validate image dimensions")
         raise SecurityError("Image validation is temporarily unavailable. Please try a PDF instead.")

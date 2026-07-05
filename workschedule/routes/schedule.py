@@ -155,6 +155,8 @@ def prepare_image_for_ai(image_bytes: bytes) -> bytes:
     Raises ValueError if the image can't be decoded.
     """
     from PIL import Image
+    import pillow_heif
+    pillow_heif.register_heif_opener()
 
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:

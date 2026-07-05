@@ -106,7 +106,10 @@ class ParserLimits:
     # ------------------------------------------------------------------
 
     # PDF and phone-photo image formats accepted. Period.
-    allowed_extensions: tuple = ('.pdf', '.png', '.jpg', '.jpeg')
+    # .heic/.heif included because iPhone's native camera format is HEIC —
+    # without it, "Take Photo" uploads fail unpredictably depending on
+    # iOS/browser settings that decide whether to auto-convert to JPEG.
+    allowed_extensions: tuple = ('.pdf', '.png', '.jpg', '.jpeg', '.heic', '.heif')
 
     # MIME types we accept from the browser.
     allowed_mime_types: tuple = (
@@ -115,6 +118,8 @@ class ParserLimits:
         'application/octet-stream',  # some browsers send this for PDFs
         'image/png',
         'image/jpeg',
+        'image/heic',
+        'image/heif',
     )
 
     # First bytes of every valid PDF file.
@@ -126,6 +131,15 @@ class ParserLimits:
 
     # First 3 bytes of every valid JPEG file (SOI marker + APP marker start).
     jpeg_magic_bytes: bytes = b'\xff\xd8\xff'
+
+    # HEIC/HEIF files don't have a fixed leading signature like PDF/PNG/JPEG.
+    # Instead, bytes 4-8 are always the ISO base media file format box type
+    # "ftyp", and bytes 8-12 carry a brand identifying the specific format.
+    # These are the brands iPhones actually produce.
+    heic_ftyp_brands: tuple = (
+        b'heic', b'heix', b'hevc', b'hevx', b'heim', b'heis',
+        b'mif1', b'msf1',
+    )
 
 
 # Singleton — import this everywhere rather than instantiating per request.

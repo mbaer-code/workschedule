@@ -11,4 +11,5 @@ pytest
 pytz
 PyMuPDF
 Pillow>=10.0.0
+pillow-heif>=0.15.0
 anthropic>=0.25.0
