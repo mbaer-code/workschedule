@@ -40,6 +40,30 @@ MAGIC_LINK_SECRET = os.getenv("MAGIC_LINK_SECRET", "change-me-in-production")
 MAGIC_LINK_TTL_SECONDS = 3600  # 1 hour
 
 
+def _client_ip() -> str:
+    """
+    Return the real visitor IP, not the internal address Cloud Run's load
+    balancer connects from.
+
+    Cloud Run (and GCP's HTTP(S) load balancer generally) sits in front of
+    the app and forwards requests from an internal address -- request.
+    remote_addr alone reflects that internal hop, not the visitor. Without
+    this, every visitor is indistinguishable to the rate limiter, which
+    means the whole service effectively shares one rate-limit bucket
+    instead of each visitor getting their own.
+
+    Cloud Run sets X-Forwarded-For as "client, proxy1, proxy2, ..." -- the
+    original client IP is the first entry. This header is set by Google's
+    infrastructure itself (not the browser), so it's trustworthy in this
+    deployment; it would need stricter validation if untrusted proxies
+    could also be in the request path.
+    """
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.remote_addr
+
+
 # ---------------------------------------------------------------------------
 # Magic-link helpers
 # ---------------------------------------------------------------------------
@@ -237,8 +261,8 @@ def upload_pdf():
             file_bytes=pdf_contents,
             filename=secure_filename(pdf_file.filename),
             mimetype=pdf_file.content_type,
-            ip_address=request.remote_addr,
-            session_id=session.get('user_id') or request.remote_addr,
+            ip_address=_client_ip(),
+            session_id=session.get('user_id') or _client_ip(),
         )
     except SecurityError as e:
         logger.warning(f"[upload_pdf] Security check failed: {e}")
