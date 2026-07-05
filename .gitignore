@@ -9,7 +9,8 @@ __pycache__/
 *.pyd
 *.egg-info
 *.pdf
-!tests/fixtures/*.pdf
+!tests/fixtures/
+!tests/fixtures/**
 dist
 build
 *.so
