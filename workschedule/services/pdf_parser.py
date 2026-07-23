@@ -28,7 +28,30 @@ from datetime import datetime
 
 import anthropic
 
+from workschedule.services.parser_limits import limits
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Custom exceptions
+# ---------------------------------------------------------------------------
+# Both are caught by the generic `except Exception as e` handler in
+# schedule.py's upload_pdf(), which renders str(e) directly to the user —
+# so these messages are written to be user-facing, not just log lines.
+class DocumentTooDenseError(Exception):
+    """Raised pre-flight when the text has too many probable events to
+    extract reliably in one call. Distinct from 'genuinely no events
+    found' — this document has plenty of events, just too many."""
+    pass
+
+
+class ExtractionFailedError(Exception):
+    """Raised when the extraction pass's response couldn't be parsed as
+    valid JSON, or the API call itself failed. Distinct from 'genuinely
+    no events found' — something went wrong, we just don't know exactly
+    what the model returned."""
+    pass
 
 # ---------------------------------------------------------------------------
 # Anthropic client (API key from environment)
@@ -41,6 +64,31 @@ def _client() -> anthropic.Anthropic:
 
 
 MODEL = "claude-haiku-4-5-20251001"   # cheap, fast, accurate enough
+
+# How much of the extracted text each pass actually sees. Named here
+# (rather than left as inline magic numbers) so the density check below
+# can measure the same slice that _extract_events sends to the model.
+CONTEXT_CHAR_LIMIT = 3000
+EXTRACT_CHAR_LIMIT = 6000
+
+# Matches the two time formats these documents tend to use:
+#   - 12-hour with AM/PM, e.g. "6:00 PM"
+#   - bare 3-4 digit military time on its own line, e.g. "1530"
+# Each real event normally contributes two matches (start + end), so
+# match_count // 2 is a rough but cheap proxy for event count — good
+# enough to catch documents that are wildly over budget without an API call.
+_TIME_TOKEN_RE = re.compile(
+    r"\b\d{1,2}:\d{2}\s*[APap][Mm]\b|^\d{3,4}$", re.MULTILINE
+)
+
+
+def _estimate_event_density(text: str) -> int:
+    """Cheap, free, pre-API estimate of how many events are packed into
+    this text. Not exact — just enough to catch documents like a
+    multi-terminal port schedule (a time on nearly every line) before
+    spending a call on them."""
+    matches = _TIME_TOKEN_RE.findall(text)
+    return len(matches) // 2
 
 
 # ---------------------------------------------------------------------------
@@ -58,13 +106,17 @@ Return this exact structure:
   "has_calendar_content": true or false
 }}
 
+has_calendar_content guidance:
+- Set this to true for ANY document containing specific dates paired with times or day-long events — including reference/lookup tables where which row applies depends on something outside the document (e.g. a final exam schedule mapping class meeting times to exam dates, a store's holiday hours by location). The person reviewing the extracted events afterward decides which ones are relevant to them and discards the rest — that filtering is not this step's job.
+- Only set this to false when the document genuinely has no dated, schedulable entries at all (e.g. a cover letter, a blank form, prose with no dates).
+
 Document text:
 {text}"""
 
 
 def _get_document_context(text: str) -> dict:
     """Pass 1: understand what the document is."""
-    prompt = CONTEXT_PROMPT.format(text=text[:3000])
+    prompt = CONTEXT_PROMPT.format(text=text[:CONTEXT_CHAR_LIMIT])
     try:
         response = _client().messages.create(
             model=MODEL,
@@ -107,10 +159,19 @@ Rules:
 - shift_date format: abbreviated weekday, abbreviated month, zero-padded day (e.g. "Mon, Sep 08")
 - shift_start / shift_end: 12-hour time with AM/PM (e.g. "11:30 AM", "8:00 PM")
 - If no time (day off, holiday): use empty string "" for shift_start and shift_end
-- department: role or department label; use empty string if not found
+- department: a short label for what this event is — a work role/department if it's a shift, but for other document types use whatever short label fits: a class code ("MWF", "TR"), an event type ("Final Exam", "Team Meeting", "Office Hours"), a course/section number, etc. Only use empty string if truly nothing in the row suggests any label at all.
 - store_number: store/location number; use empty string if not found
 - Skip days off and non-work entries
 - If the year is provided in context, use it to resolve any ambiguous dates
+- Extract every date-bearing row you find, even ones that describe a general rule rather than a confirmed personal event (e.g. a reference table mapping a category to a date, like a final exam schedule or a store's holiday hours by location). Do not decide whether a row is "relevant enough" to keep — the person reviewing your output afterward does that filtering, not you. Only skip rows that have no date/time at all.
+- If a single row has more than one applicable date (e.g. a table with both a "Fall" date column and a "Spring" date column for the same entry), emit ONE separate event object per date — do not merge them into one event, and do not pick only one and discard the other.
+
+Date-to-shift pairing — applies specifically when dates appear as standalone labels on their own line (e.g. a line containing just "Mar" then a line containing just "8"), separate from the shift details that follow them. If the document instead uses inline table rows where the date sits on the same row as its details, this section doesn't apply — just read each row normally.
+- Each such standalone date label is followed by zero or more lines of shift detail (time range, department, store) BEFORE the next date label appears.
+- A shift belongs to the date label that comes IMMEDIATELY before it in the text — never an earlier date label, even if several consecutive dates in between had no shift text.
+- Many dates will have NO shift text at all — the next thing after their label is simply the next date label. Do not skip over these; do not borrow their "empty slot" for a later shift. Each date is independent: only emit an event for a date if shift text appears directly under THAT date's own label, before the next one.
+- Concretely: if you see date labels 4, 5, 6, 7, 8 in a row with no text between them, and then a time range appears right after 8, that time range belongs to 8 — not to 4, 5, 6, or 7 (which get no event at all).
+- Before finalizing, double-check each event's date against the label that directly precedes its shift text in the source, not against your running count of "how many dates have I seen."
 
 Schedule text:
 {text}"""
@@ -118,26 +179,44 @@ Schedule text:
 
 def _extract_events(text: str, context: dict) -> list:
     """Pass 2: extract structured events from the document."""
+    extract_slice = text[:EXTRACT_CHAR_LIMIT]
+
     prompt = EXTRACT_PROMPT.format(
         doc_type=context.get("doc_type", "work_schedule"),
         subject=context.get("subject") or "",
         location=context.get("location") or "",
         year=context.get("year") or datetime.now().year,
-        text=text[:6000]
+        text=extract_slice
     )
     try:
         response = _client().messages.create(
             model=MODEL,
-            max_tokens=2048,
+            max_tokens=8192,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = response.content[0].text.strip()
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"\n?```$", "", raw)
+        logger.debug(f"[pdf_parser] Raw extraction response: {raw!r}")
         return json.loads(raw)
+    except json.JSONDecodeError as e:
+        # Most commonly caused by the response getting cut off mid-object
+        # because there were more events than max_tokens could fit — see
+        # DocumentTooDenseError, which should catch most of these before
+        # we even get here. This is the fallback for cases the pre-flight
+        # estimate missed (e.g. unusually long department/title strings).
+        logger.error(f"[pdf_parser] Extraction response was not valid JSON: {e}")
+        raise ExtractionFailedError(
+            "This document's layout or entry count was too complex for "
+            "automatic extraction to complete in one pass. Try a shorter "
+            "excerpt, or a simpler layout (fewer columns or sections)."
+        ) from e
     except Exception as e:
         logger.error(f"[pdf_parser] Extraction pass failed: {e}")
-        return []
+        raise ExtractionFailedError(
+            "We couldn't process this document right now. Please try "
+            "again in a moment."
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -249,8 +328,52 @@ def parse_image_with_summary(image_bytes: bytes, media_type: str = "image/jpeg")
 # ---------------------------------------------------------------------------
 REQUIRED_KEYS = {"shift_date", "shift_start", "shift_end", "department", "store_number"}
 
-# Accepts "Mon, Sep 08" or "Sep 08" (weekday prefix optional)
-DATE_RE = re.compile(r"^(?:[A-Z][a-z]{2}, )?[A-Z][a-z]{2} \d{2}$")
+# Accepts "Mon, Sep 08" or "Sep 08" (weekday prefix optional). Weekday
+# abbreviation length is flexible (2-9 lowercase letters) rather than fixed
+# at 3 — some source documents use "Tues"/"Thurs" instead of "Tue"/"Thu",
+# and a model extracting verbatim from the source will reproduce that
+# spelling. This regex just checks shape; _normalize_shift_date below maps
+# whatever weekday spelling shows up to the standard 3-letter form that
+# ics_generator.py's strptime("%a, ...") actually requires.
+DATE_RE = re.compile(r"^(?:[A-Z][a-z]{1,8}, )?[A-Z][a-z]{2} \d{2}$")
+
+# Maps any recognizable weekday spelling (however long, however the source
+# document abbreviates it) to the standard 3-letter form. Without this,
+# a source document's own non-standard abbreviation (e.g. "Tues.", "Thurs.")
+# gets copied verbatim by extraction, passes shape validation, then fails
+# silently later at ICS generation because strptime's %a only recognizes
+# the standard 3-letter names.
+_WEEKDAY_NORMALIZE = {
+    "mon": "Mon", "monday": "Mon",
+    "tue": "Tue", "tues": "Tue", "tuesday": "Tue",
+    "wed": "Wed", "weds": "Wed", "wednesday": "Wed",
+    "thu": "Thu", "thur": "Thu", "thurs": "Thu", "thursday": "Thu",
+    "fri": "Fri", "friday": "Fri",
+    "sat": "Sat", "saturday": "Sat",
+    "sun": "Sun", "sunday": "Sun",
+}
+
+
+def _normalize_shift_date(value: str) -> str | None:
+    """
+    Validate shape and normalize the weekday abbreviation to the standard
+    3-letter form. Returns the normalized string, or None if the value
+    doesn't look like a date at all (rejected).
+    """
+    if not value or not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not DATE_RE.match(stripped):
+        return None
+    if ", " not in stripped:
+        return stripped  # no weekday prefix — already just "Sep 08"
+    weekday_part, rest = stripped.split(", ", 1)
+    standard = _WEEKDAY_NORMALIZE.get(weekday_part.lower())
+    if standard is None:
+        # Shape matched but it's not a weekday we recognize — safer to
+        # reject than pass through something strptime will choke on.
+        return None
+    return f"{standard}, {rest}"
 TIME_RE = re.compile(r"^\d{1,2}:\d{2} [AP]M$")   # 12-hour only, e.g. "11:30 AM"
 
 _MONTH_ABBR = {m: i for i, m in enumerate(
@@ -330,9 +453,11 @@ def _validate_events(events: list, context: dict) -> list:
         if not REQUIRED_KEYS.issubset(ev.keys()):
             logger.debug(f"[pdf_parser] Skipping event missing keys: {ev}")
             continue
-        if not _is_valid_date(ev.get("shift_date"), year):
-            logger.debug(f"[pdf_parser] Bad date: {ev.get('shift_date')}")
+        normalized_date = _normalize_shift_date(ev.get("shift_date"))
+        if normalized_date is None:
+            logger.debug(f"[pdf_parser] Bad date: {ev.get('shift_date')!r}")
             continue
+        ev["shift_date"] = normalized_date
         start = ev.get("shift_start", "")
         end = ev.get("shift_end", "")
         if not _is_valid_time(start):
@@ -345,10 +470,19 @@ def _validate_events(events: list, context: dict) -> list:
         if bool(start) != bool(end):
             logger.debug(f"[pdf_parser] Mismatched times start={start!r} end={end!r}")
             continue
-        # Require a meaningful department/title
+        # A blank/trivial department label is cosmetic, not disqualifying —
+        # the date and time are the essential data. Fall back to a generic
+        # label rather than discarding an otherwise-valid event; this is
+        # the safety net for whenever the model doesn't fill in something
+        # useful (e.g. a document type with no natural "department" concept),
+        # regardless of how well the prompt's guidance is followed.
         if not _is_meaningful_title(ev.get("department")):
-            logger.debug(f"[pdf_parser] No meaningful title: {ev.get('department')!r}")
-            continue
+            fallback = context.get("subject") or "Scheduled Event"
+            logger.debug(
+                f"[pdf_parser] Blank/trivial title {ev.get('department')!r} "
+                f"— using fallback {fallback!r} instead of discarding event"
+            )
+            ev["department"] = fallback
         # Fill in store number from context if blank
         if not ev.get("store_number") and default_store:
             ev["store_number"] = default_store
@@ -384,6 +518,23 @@ def parse_document_with_summary(text: str) -> tuple:
     if not text or len(text.strip()) < 20:
         logger.warning("[pdf_parser] Text too short to parse")
         return [], ""
+
+    # Pre-flight density check — free, no API call. Catches documents
+    # like a multi-terminal port schedule (a time on nearly every line)
+    # before spending money on a call that would just come back truncated.
+    estimated_events = _estimate_event_density(text[:EXTRACT_CHAR_LIMIT])
+    if estimated_events > limits.max_estimated_events:
+        logger.warning(
+            f"[pdf_parser] Document too dense: ~{estimated_events} "
+            f"estimated events in first {EXTRACT_CHAR_LIMIT} chars "
+            f"(limit {limits.max_estimated_events})"
+        )
+        raise DocumentTooDenseError(
+            f"This document has more entries (approximately {estimated_events} "
+            f"detected) than a single processing pass can reliably extract. "
+            f"Try uploading a shorter excerpt — a smaller date range, or "
+            f"fewer sections/columns of the same document."
+        )
 
     # Pass 1: understand the document
     context = _get_document_context(text)

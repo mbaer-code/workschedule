@@ -54,6 +54,27 @@ class ParserLimits:
         default_factory=lambda: int(os.getenv("MIN_TEXT_CHARS", "50"))
     )
 
+    # Maximum estimated events allowed in the text slice sent to the
+    # extraction pass. This is a DENSITY check, not a length check — a
+    # long but sparse document (a syllabus, a long itinerary) is fine;
+    # a short but event-dense one (a multi-terminal port schedule with
+    # a ship + times on nearly every line) is not.
+    #
+    # The estimate itself is a rough proxy (see _estimate_event_density),
+    # not an exact count — some document formats (e.g. an exam schedule
+    # with 4 time columns per row: class-start range + exam-time range)
+    # trip the time-token heuristic without actually producing that many
+    # output events. Rather than chase a perfect estimator, this limit is
+    # set high enough to only catch genuinely extreme cases, while the
+    # extraction call's max_tokens=8192 (~217 event capacity) covers the
+    # real worst case a 6000-char input slice could produce (~150 rows
+    # even at a dense ~40 chars/row). This check exists mainly as a
+    # courtesy — a fast, free, pre-API "yeah don't bother" for documents
+    # that are obviously the wrong shape for a personal calendar sync.
+    max_estimated_events: int = field(
+        default_factory=lambda: int(os.getenv("MAX_ESTIMATED_EVENTS", "180"))
+    )
+
     # ------------------------------------------------------------------
     # Rate limiting
     # ------------------------------------------------------------------

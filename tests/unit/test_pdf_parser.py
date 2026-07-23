@@ -23,6 +23,7 @@ from workschedule.services.pdf_parser import (
     _is_valid_time,
     _is_meaningful_title,
     _validate_events,
+    ExtractionFailedError,
 )
 from workschedule.routes.schedule import extract_text_from_pdf
 from workschedule.services.security import check_upload, SecurityError
@@ -142,7 +143,7 @@ class TestValidateEvents:
         result = _validate_events(events, self._ctx())
         assert len(result) == 0
 
-    def test_no_meaningful_title_rejected(self):
+    def test_blank_title_gets_fallback_not_rejected(self):
         events = [{
             "shift_date": "Mon, Sep 08",
             "shift_start": "",
@@ -151,7 +152,21 @@ class TestValidateEvents:
             "store_number": ""
         }]
         result = _validate_events(events, self._ctx())
-        assert len(result) == 0
+        assert len(result) == 1
+        assert result[0]['department'] == "Scheduled Event"
+
+    def test_blank_title_falls_back_to_subject_when_available(self):
+        events = [{
+            "shift_date": "Mon, Sep 08",
+            "shift_start": "",
+            "shift_end": "",
+            "department": "",
+            "store_number": ""
+        }]
+        ctx = {**self._ctx(), "subject": "Acme Home Improvement"}
+        result = _validate_events(events, ctx)
+        assert len(result) == 1
+        assert result[0]['department'] == "Acme Home Improvement"
 
     def test_multiple_mixed_events(self):
         events = [
@@ -283,12 +298,12 @@ class TestParseDocument:
         mock_client.assert_not_called()
 
     @patch('workschedule.services.pdf_parser._client')
-    def test_api_failure_returns_empty(self, mock_client):
+    def test_api_failure_raises_extraction_failed(self, mock_client):
         client = MagicMock()
         mock_client.return_value = client
         client.messages.create.side_effect = Exception("API timeout")
-        result = parse_document("Sep 11 11:30 AM - 8:00 PM")
-        assert result == []
+        with pytest.raises(ExtractionFailedError):
+            parse_document("Sep 11 11:30 AM - 8:00 PM")
 
     @patch('workschedule.services.pdf_parser._client')
     def test_garbage_events_filtered(self, mock_client):
@@ -309,6 +324,37 @@ class TestParseDocument:
         result = parse_document("some schedule text here for testing purposes")
         assert len(result) == 1
         assert result[0]['department'] == "Cashier"
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_nonstandard_weekday_abbreviations_normalized(self, mock_client):
+        """
+        Regression test: a source document that spells weekdays as "Tues"/
+        "Thurs" (e.g. a college exam schedule table) instead of the
+        standard "Tue"/"Thu" used to get silently dropped — the shape
+        validator required exactly 3 letters, so a model extracting these
+        verbatim from the source produced dates that never made it into
+        the output, sometimes zeroing out the whole result.
+        """
+        client = MagicMock()
+        mock_client.return_value = client
+        events = [
+            {"shift_date": "Tues, May 19", "shift_start": "10:15 AM",
+             "shift_end": "12:15 PM", "department": "Final Exam", "store_number": ""},
+            {"shift_date": "Thurs, May 21", "shift_start": "3:00 PM",
+             "shift_end": "5:00 PM", "department": "Final Exam", "store_number": ""},
+            {"shift_date": "Mon, May 18", "shift_start": "8:00 AM",
+             "shift_end": "10:00 AM", "department": "Final Exam", "store_number": ""},
+        ]
+        client.messages.create.side_effect = [
+            _mock_response(json.dumps(MOCK_CONTEXT)),
+            _mock_response(json.dumps(events))
+        ]
+        result = parse_document("some exam schedule text here for testing")
+        assert len(result) == 3
+        # Normalized to the standard 3-letter form ics_generator.py's
+        # strptime("%a, ...") actually requires.
+        dates = {e['shift_date'] for e in result}
+        assert dates == {"Tue, May 19", "Thu, May 21", "Mon, May 18"}
 
 
 class TestGetDocumentSummary:
