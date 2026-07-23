@@ -148,7 +148,7 @@ def _delete_from_gcs(blob_path: str):
 
 
 # ---------------------------------------------------------------------------
-# PDF text extraction
+# schedule text extraction
 # ---------------------------------------------------------------------------
 def extract_text_from_pdf(pdf_contents: bytes) -> str:
     try:
@@ -157,7 +157,7 @@ def extract_text_from_pdf(pdf_contents: bytes) -> str:
         doc.close()
         return text
     except Exception as e:
-        logger.error(f"Error extracting text from PDF: {e}")
+        logger.error(f"Error extracting text from input: {e}")
         return ""
 
 
@@ -239,7 +239,7 @@ def upload_pdf():
 
     if not pdf_file or pdf_file.filename == '':
         return render_template("upload_schedule_new.html",
-                               pdf_error="Please select a PDF file.")
+                               pdf_error="Please select input for processing.")
 
     try:
         pdf_contents = pdf_file.read()

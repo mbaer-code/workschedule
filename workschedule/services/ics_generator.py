@@ -260,7 +260,7 @@ def create_ics_from_entries(entries, calendar_name="work-schedule", timezone_str
         if end_dt < start_dt:
             end_dt += timedelta(days=1)
         event = Event()
-        event.add('summary', 'THD')  # Change title to THD
+        event.add('summary', 'Title')  # Change title to Title
         event.add('dtstart', start_dt)
         event.add('dtend', end_dt)
         now_utc = datetime.now(timezone.utc)
