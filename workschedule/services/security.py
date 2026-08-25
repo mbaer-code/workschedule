@@ -49,13 +49,13 @@ logger = logging.getLogger(__name__)
 # is deliberate: a native-library mismatch can surface as OSError,
 # RuntimeError, or other exception types depending on platform.
 try:
-    from PIL import Image
+    from PIL import Image, ImageFilter, ImageStat
     import pillow_heif
     pillow_heif.register_heif_opener()
     _HEIF_SUPPORT = True
 except Exception as e:  # noqa: BLE001
     logger.error(f"[security] pillow-heif unavailable, HEIC/HEIF support disabled: {e}")
-    from PIL import Image
+    from PIL import Image, ImageFilter, ImageStat
     _HEIF_SUPPORT = False
 
 
@@ -208,6 +208,53 @@ def _check_image_dimensions(data: bytes):
         raise SecurityError("The image file appears to be corrupted.")
 
 
+def _image_sharpness_score(data: bytes) -> float:
+    """
+    Rough blur/legibility proxy: variance of a Laplacian-style edge filter
+    on a downscaled grayscale copy. Higher = more/sharper edges = more
+    likely to contain legible text; a genuinely out-of-focus or heavily
+    motion-blurred photo tends to score much lower. Pure PIL, no
+    numpy/opencv dependency.
+
+    This is a heuristic, not a validated measurement -- see
+    limits.min_image_sharpness for why it defaults to log-only rather
+    than enforcing a cutoff.
+    """
+    with Image.open(BytesIO(data)) as img:
+        gray = img.convert("L")
+        gray.thumbnail((800, 800))  # blur is scale-independent; keeps this fast
+        edges = gray.filter(ImageFilter.FIND_EDGES)
+        return ImageStat.Stat(edges).var[0]
+
+
+def _check_image_sharpness(data: bytes):
+    """
+    Logs a sharpness score for every image (see min_image_sharpness's
+    docstring for why enforcement is opt-in). Only raises when
+    limits.min_image_sharpness is set above 0.
+    """
+    try:
+        score = _image_sharpness_score(data)
+    except Exception as e:
+        # A failed sharpness read shouldn't block an otherwise-valid
+        # upload -- _check_image_dimensions already confirmed this file
+        # decodes. This check is a soft signal, not a hard requirement.
+        logger.warning(f"[security] Could not compute sharpness score: {e}")
+        return
+
+    logger.info(f"[security] Image sharpness score: {score:.1f} "
+                f"(min_image_sharpness={limits.min_image_sharpness})")
+
+    if limits.min_image_sharpness > 0 and score < limits.min_image_sharpness:
+        logger.warning(f"[security] Image rejected as too blurry: "
+                        f"score={score:.1f} < min={limits.min_image_sharpness}")
+        raise SecurityError(
+            "This photo looks too blurry to read reliably. Try retaking it "
+            "with better lighting, holding the camera steady, and making "
+            "sure the schedule fills the frame and is in focus."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Text-level checks (after extraction, before AI call)
 # ---------------------------------------------------------------------------
@@ -265,6 +312,7 @@ def check_upload(
     _check_file_size(file_bytes, kind)
     if kind == "image":
         _check_image_dimensions(file_bytes)
+        _check_image_sharpness(file_bytes)
 
     logger.info(f"[security] Upload passed all checks: {filename} (kind={kind})")
     return kind
@@ -314,6 +362,7 @@ def check_upload_batch(
         _check_file_size(file_bytes, kind)
         if kind == "image":
             _check_image_dimensions(file_bytes)
+            _check_image_sharpness(file_bytes)
             combined_image_bytes += len(file_bytes)
         kinds.append(kind)
 

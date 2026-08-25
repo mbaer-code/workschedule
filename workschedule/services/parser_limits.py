@@ -140,6 +140,19 @@ class ParserLimits:
             os.getenv("MAX_COMBINED_IMAGE_SIZE_MB", "20")) * 1024 * 1024
     )
 
+    # Blur/legibility guard: rejects a photo whose sharpness score (see
+    # _image_sharpness_score in security.py -- a Laplacian-edge-variance
+    # proxy, pure PIL, no numpy/opencv) falls below this. 0 = disabled
+    # (log-only mode). Defaulting to disabled deliberately -- there's no
+    # real calibration data yet for what score separates "fine" from
+    # "the AI is going to hallucinate this." Every image upload still
+    # logs its score either way, so real numbers (a known-blurry photo
+    # vs. a normal one) can be collected first; once there's a real
+    # threshold, enable it via this env var with no code change needed.
+    min_image_sharpness: float = field(
+        default_factory=lambda: float(os.getenv("MIN_IMAGE_SHARPNESS", "0"))
+    )
+
     # ------------------------------------------------------------------
     # HARDCODED — do not expose as env vars (security-critical)
     # ------------------------------------------------------------------
