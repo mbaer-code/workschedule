@@ -184,17 +184,26 @@
         // Mobile camera capture only ever returns one photo per "Take
         // Photo" tap, even with `multiple` set on the input -- that's a
         // browser/OS limitation, not something an attribute fixes. So we
-        // keep our own running list of File objects across repeated
-        // selections and rebuild the input's FileList (via DataTransfer)
-        // before submit, rather than relying on the browser to accumulate
-        // them for us.
+        // keep our own running list across repeated selections.
+        //
+        // That list can't live only in a JS variable, though: on a phone,
+        // handing off to the camera app commonly gets the browser tab's
+        // page reloaded from scratch when you come back (low-memory
+        // background tabs are a frequent target for this) -- in-memory
+        // state doesn't survive that. So each accumulated photo is also
+        // written to IndexedDB immediately, and restored from there on
+        // page load, so "take photo" 4 times in a row actually builds up
+        // to 4 photos instead of silently losing everything but the last
+        // one each time the page comes back.
         const MAX_PHOTOS = 4;
+        const DB_NAME = 'workschedule-upload-photos';
+        const STORE_NAME = 'photos';
         const fileInput = document.getElementById('pdfFile');
         const fileInputLabel = document.getElementById('file-input-label');
         const thumbsEl = document.getElementById('photo-thumbs');
         const hintEl = document.getElementById('photo-hint');
         const jsErrorEl = document.getElementById('js-error');
-        let selectedFiles = [];
+        let selectedPhotos = []; // [{ id, file }], id is the IndexedDB key
 
         function isPdf(file) {
             return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
@@ -208,16 +217,62 @@
             jsErrorEl.textContent = '';
         }
 
+        // --- IndexedDB persistence (survives a mobile page reload) ---
+        function openPhotoDb() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onupgradeneeded = () => {
+                    req.result.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function dbGetAllPhotos() {
+            const db = await openPhotoDb();
+            return new Promise((resolve, reject) => {
+                const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function dbAddPhoto(file) {
+            const db = await openPhotoDb();
+            return new Promise((resolve, reject) => {
+                const req = db.transaction(STORE_NAME, 'readwrite')
+                    .objectStore(STORE_NAME)
+                    .add({ name: file.name, type: file.type, blob: file });
+                req.onsuccess = () => resolve(req.result); // new record's id
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function dbDeletePhoto(id) {
+            const db = await openPhotoDb();
+            return new Promise((resolve, reject) => {
+                const req = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(id);
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function dbClearPhotos() {
+            const db = await openPhotoDb();
+            return new Promise((resolve, reject) => {
+                const req = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).clear();
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+        }
+
         function syncInputFiles() {
             const dt = new DataTransfer();
-            selectedFiles.forEach(f => dt.items.add(f));
+            selectedPhotos.forEach(p => dt.items.add(p.file));
             fileInput.files = dt.files;
         }
 
         function renderSelection() {
             thumbsEl.innerHTML = '';
 
-            if (selectedFiles.length === 0) {
+            if (selectedPhotos.length === 0) {
                 thumbsEl.classList.add('hidden');
                 hintEl.classList.add('hidden');
                 fileInputLabel.textContent = 'Click or drag a PDF or photo of your schedule here';
@@ -227,31 +282,31 @@
 
             fileInput.parentNode.style.borderColor = '#0ea5e9';
 
-            if (selectedFiles.length === 1 && isPdf(selectedFiles[0])) {
-                fileInputLabel.textContent = selectedFiles[0].name;
+            if (selectedPhotos.length === 1 && isPdf(selectedPhotos[0].file)) {
+                fileInputLabel.textContent = selectedPhotos[0].file.name;
                 thumbsEl.classList.add('hidden');
                 hintEl.classList.add('hidden');
                 return;
             }
 
             fileInputLabel.textContent =
-                `${selectedFiles.length} photo${selectedFiles.length > 1 ? 's' : ''} selected`;
+                `${selectedPhotos.length} photo${selectedPhotos.length > 1 ? 's' : ''} selected`;
             thumbsEl.classList.remove('hidden');
 
-            if (selectedFiles.length < MAX_PHOTOS) {
+            if (selectedPhotos.length < MAX_PHOTOS) {
                 hintEl.textContent =
-                    `Multiple pages or screens of the same schedule? Tap above to add up to ${MAX_PHOTOS - selectedFiles.length} more.`;
+                    `Multiple pages or screens of the same schedule? Tap above to add up to ${MAX_PHOTOS - selectedPhotos.length} more.`;
                 hintEl.classList.remove('hidden');
             } else {
                 hintEl.classList.add('hidden');
             }
 
-            selectedFiles.forEach((file, idx) => {
+            selectedPhotos.forEach((photo, idx) => {
                 const tile = document.createElement('div');
                 tile.className = 'photo-thumb';
 
                 const img = document.createElement('img');
-                const url = URL.createObjectURL(file);
+                const url = URL.createObjectURL(photo.file);
                 img.src = url;
                 img.onload = () => URL.revokeObjectURL(url);
                 img.alt = `Photo ${idx + 1}`;
@@ -260,12 +315,15 @@
                 removeBtn.type = 'button';
                 removeBtn.textContent = '\u00d7';
                 removeBtn.setAttribute('aria-label', 'Remove this photo');
-                removeBtn.addEventListener('click', (e) => {
+                removeBtn.addEventListener('click', async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    selectedFiles.splice(idx, 1);
+                    selectedPhotos.splice(idx, 1);
                     syncInputFiles();
                     renderSelection();
+                    if (photo.id !== undefined) {
+                        try { await dbDeletePhoto(photo.id); } catch (err) { console.error(err); }
+                    }
                 });
 
                 tile.appendChild(img);
@@ -274,36 +332,60 @@
             });
         }
 
+        // Restore anything left over from a page reload (e.g. the browser
+        // reloaded this tab while the camera app was in the foreground).
+        (async function restoreFromDb() {
+            try {
+                const records = await dbGetAllPhotos();
+                if (records.length === 0) return;
+                selectedPhotos = records.map(r => ({
+                    id: r.id,
+                    file: new File([r.blob], r.name, { type: r.type }),
+                }));
+                syncInputFiles();
+                renderSelection();
+            } catch (err) {
+                console.error('[upload] Could not restore photos from IndexedDB:', err);
+            }
+        })();
+
         fileInput.addEventListener('click', (e) => {
             // At the cap already -- block the picker rather than let a
             // new pick silently get dropped by the change handler below.
-            if (selectedFiles.length >= MAX_PHOTOS) {
+            if (selectedPhotos.length >= MAX_PHOTOS) {
                 e.preventDefault();
                 showJsError(`You can attach up to ${MAX_PHOTOS} photos. Remove one first to add another.`);
             }
         });
 
-        fileInput.addEventListener('change', (e) => {
+        fileInput.addEventListener('change', async (e) => {
             const newFiles = Array.from(e.target.files || []);
             if (newFiles.length === 0) return;
             clearJsError();
 
             const newHasPdf = newFiles.some(isPdf);
-            const existingHasPdf = selectedFiles.some(isPdf);
+            const existingHasPdf = selectedPhotos.some(p => isPdf(p.file));
 
             if (newHasPdf || existingHasPdf) {
                 // PDFs are single-document uploads -- never mixed with
                 // photos or with each other. The newest pick wins.
-                if (newFiles.length > 1 || (existingHasPdf && selectedFiles.length > 0 && !newHasPdf)) {
+                if (newFiles.length > 1 || (existingHasPdf && selectedPhotos.length > 0 && !newHasPdf)) {
                     showJsError('Please upload one PDF at a time, with no other photos attached.');
                 }
-                selectedFiles = [newFiles[newFiles.length - 1]];
+                try { await dbClearPhotos(); } catch (err) { console.error(err); }
+                const pdfFile = newFiles[newFiles.length - 1];
+                const id = await dbAddPhoto(pdfFile).catch(err => { console.error(err); return undefined; });
+                selectedPhotos = [{ id, file: pdfFile }];
             } else {
-                const room = MAX_PHOTOS - selectedFiles.length;
+                const room = MAX_PHOTOS - selectedPhotos.length;
                 if (newFiles.length > room) {
                     showJsError(`Only added ${room} of those -- ${MAX_PHOTOS} photos max per upload.`);
                 }
-                selectedFiles = selectedFiles.concat(newFiles.slice(0, room));
+                const toAdd = newFiles.slice(0, room);
+                for (const file of toAdd) {
+                    const id = await dbAddPhoto(file).catch(err => { console.error(err); return undefined; });
+                    selectedPhotos.push({ id, file });
+                }
             }
 
             syncInputFiles();
@@ -311,10 +393,15 @@
         });
 
         document.getElementById('upload-form').addEventListener('submit', (e) => {
-            if (selectedFiles.length === 0) {
+            if (selectedPhotos.length === 0) {
                 e.preventDefault();
                 showJsError('Please select a PDF or at least one photo to upload.');
+                return;
             }
+            // Best-effort cleanup -- the files are already attached to the
+            // form via syncInputFiles(), so this doesn't need to finish
+            // before the browser navigates away.
+            dbClearPhotos().catch(err => console.error(err));
         });
     </script>
 </body>
