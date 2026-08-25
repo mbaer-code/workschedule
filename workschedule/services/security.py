@@ -270,6 +270,75 @@ def check_upload(
     return kind
 
 
+def check_upload_batch(
+    files: list,
+    ip_address: str = None,
+    session_id: str = None,
+) -> list:
+    """
+    Validates a batch of 1-N uploaded files (multiple photos of the same
+    document). Mirrors check_upload()'s per-file checks, but runs rate
+    limiting ONCE for the whole batch rather than once per file — a
+    4-photo upload should cost one "upload" against the per-IP/session
+    limit, not four, since from the user's perspective it's one submission.
+
+    files: list of (file_bytes, filename, mimetype) tuples, in upload order.
+    Returns the list of detected kinds ("pdf"/"image"), same order as files.
+    Raises SecurityError with a user-friendly message if anything fails.
+    """
+    if not files:
+        raise SecurityError("Please select input for processing.")
+
+    if len(files) > limits.max_photos_per_upload:
+        raise SecurityError(
+            f"Please select at most {limits.max_photos_per_upload} photos "
+            f"at a time."
+        )
+
+    logger.info(f"[security] Checking batch of {len(files)} upload(s), "
+                f"ip={ip_address}")
+
+    # Rate limits first, once for the whole batch — fastest check, no file
+    # reading needed, and shouldn't scale with how many photos came along.
+    if ip_address:
+        _rate_limiter.check_ip(ip_address)
+    if session_id:
+        _rate_limiter.check_session(session_id)
+
+    kinds = []
+    combined_image_bytes = 0
+    for file_bytes, filename, mimetype in files:
+        _check_extension(filename)
+        _check_mime(mimetype)
+        kind = _detect_kind(file_bytes)
+        _check_file_size(file_bytes, kind)
+        if kind == "image":
+            _check_image_dimensions(file_bytes)
+            combined_image_bytes += len(file_bytes)
+        kinds.append(kind)
+
+    if len(files) > 1 and any(k == "pdf" for k in kinds):
+        raise SecurityError(
+            "Please upload one PDF at a time. Multiple photos are fine "
+            "together, but PDFs need to go one per upload."
+        )
+
+    if combined_image_bytes > limits.max_combined_image_size_bytes:
+        mb = limits.max_combined_image_size_bytes // (1024 * 1024)
+        logger.warning(
+            f"[security] Combined image size too large: "
+            f"{combined_image_bytes} bytes across {len(files)} photos"
+        )
+        raise SecurityError(
+            f"Those photos are too large together (over {mb}MB total). "
+            f"Try fewer photos or lower-resolution shots."
+        )
+
+    logger.info(f"[security] Batch of {len(files)} upload(s) passed all "
+                f"checks: kinds={kinds}")
+    return kinds
+
+
 def check_text(text: str) -> str:
     """
     Run text-level checks after PDF extraction, before AI call.

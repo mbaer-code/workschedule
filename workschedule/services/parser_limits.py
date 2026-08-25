@@ -122,6 +122,24 @@ class ParserLimits:
         default_factory=lambda: int(os.getenv("MAX_IMAGE_DIMENSION", "2000"))
     )
 
+    # Multiple photos of the same document (e.g. multi-page schedule, or
+    # a schedule app screen that needed several scrolled screenshots) can
+    # be uploaded together and merged in one vision call. Capped at 4 —
+    # enough for the real cases seen so far without letting one "upload"
+    # balloon into an unbounded batch.
+    max_photos_per_upload: int = field(
+        default_factory=lambda: int(os.getenv("MAX_PHOTOS_PER_UPLOAD", "4"))
+    )
+
+    # Combined size across all photos in one multi-photo upload. Each
+    # individual photo still has to pass max_image_size_bytes on its own;
+    # this additionally bounds the total, since 4 photos each just under
+    # the per-image cap could otherwise add up to a very large request.
+    max_combined_image_size_bytes: int = field(
+        default_factory=lambda: int(
+            os.getenv("MAX_COMBINED_IMAGE_SIZE_MB", "20")) * 1024 * 1024
+    )
+
     # ------------------------------------------------------------------
     # HARDCODED — do not expose as env vars (security-critical)
     # ------------------------------------------------------------------

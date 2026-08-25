@@ -12,7 +12,9 @@ import io
 
 import pytest
 
-from workschedule.services.security import check_upload, SecurityError, _detect_kind
+from workschedule.services.security import (
+    check_upload, check_upload_batch, SecurityError, _detect_kind,
+)
 
 
 def _real_heic_bytes(size=(400, 400)) -> bytes:
@@ -105,3 +107,92 @@ class TestGracefulDegradationWithoutHeif:
             mimetype='image/png',
         )
         assert kind == 'image'
+
+
+def _real_png_bytes(size=(400, 400), color='blue') -> bytes:
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new('RGB', size, color=color).save(buf, format='PNG')
+    return buf.getvalue()
+
+
+def _real_pdf_bytes() -> bytes:
+    # Minimal but valid PDF structure, well above min_file_size_bytes.
+    return (
+        b'%PDF-1.4\n'
+        b'1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n'
+        b'2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n'
+        b'3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n'
+        b'trailer<</Root 1 0 R>>\n'
+        + b'%' * 1200  # padding well past min_file_size_bytes (1024 bytes)
+    )
+
+
+class TestCheckUploadBatch:
+    """
+    check_upload_batch() backs the multi-photo upload path: several
+    photos of the same document submitted together under one field name.
+    Rate limiting must apply once per BATCH (one submission), not once
+    per photo, or a legitimate 4-photo upload would burn 4x the rate
+    limit budget of an equivalent single-file upload.
+    """
+
+    def test_multiple_photos_all_pass_as_images(self):
+        files = [(_real_png_bytes(), f'IMG_{i}.png', 'image/png') for i in range(3)]
+        kinds = check_upload_batch(files)
+        assert kinds == ['image', 'image', 'image']
+
+    def test_single_pdf_still_works(self):
+        files = [(_real_pdf_bytes(), 'schedule.pdf', 'application/pdf')]
+        kinds = check_upload_batch(files)
+        assert kinds == ['pdf']
+
+    def test_empty_batch_rejected(self):
+        with pytest.raises(SecurityError):
+            check_upload_batch([])
+
+    def test_batch_over_max_photos_rejected(self):
+        files = [(_real_png_bytes(), f'IMG_{i}.png', 'image/png') for i in range(5)]
+        with pytest.raises(SecurityError):
+            check_upload_batch(files)
+
+    def test_mixed_pdf_and_photo_rejected(self):
+        files = [
+            (_real_pdf_bytes(), 'schedule.pdf', 'application/pdf'),
+            (_real_png_bytes(), 'IMG_1.png', 'image/png'),
+        ]
+        with pytest.raises(SecurityError):
+            check_upload_batch(files)
+
+    def test_two_pdfs_rejected(self):
+        files = [
+            (_real_pdf_bytes(), 'a.pdf', 'application/pdf'),
+            (_real_pdf_bytes(), 'b.pdf', 'application/pdf'),
+        ]
+        with pytest.raises(SecurityError):
+            check_upload_batch(files)
+
+    def test_one_bad_photo_rejects_whole_batch(self):
+        files = [
+            (_real_png_bytes(), 'IMG_1.png', 'image/png'),
+            (b'not a real image' + b'\x00' * 600, 'IMG_2.png', 'image/png'),
+        ]
+        with pytest.raises(SecurityError):
+            check_upload_batch(files)
+
+    def test_rate_limit_applied_once_per_batch_not_per_photo(self, monkeypatch):
+        import workschedule.services.security as security_module
+
+        calls = {'ip': 0, 'session': 0}
+        monkeypatch.setattr(
+            security_module._rate_limiter, 'check_ip',
+            lambda ip: calls.__setitem__('ip', calls['ip'] + 1))
+        monkeypatch.setattr(
+            security_module._rate_limiter, 'check_session',
+            lambda sid: calls.__setitem__('session', calls['session'] + 1))
+
+        files = [(_real_png_bytes(), f'IMG_{i}.png', 'image/png') for i in range(4)]
+        check_upload_batch(files, ip_address='1.2.3.4', session_id='sess-1')
+
+        assert calls['ip'] == 1
+        assert calls['session'] == 1

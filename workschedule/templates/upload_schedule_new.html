@@ -34,6 +34,34 @@
             font-size: 1rem;
             color: #6b7280;
         }
+        .photo-thumb {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+            background: #f3f4f6;
+        }
+        .photo-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .photo-thumb button {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            border-radius: 9999px;
+            width: 20px;
+            height: 20px;
+            line-height: 18px;
+            font-size: 13px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center font-sans">
@@ -53,7 +81,7 @@
             {% endif %}
         {% endwith %}
 
-        <form action="{{ url_for('schedule_bp.upload_pdf') }}" method="post" enctype="multipart/form-data" class="space-y-5">
+        <form id="upload-form" action="{{ url_for('schedule_bp.upload_pdf') }}" method="post" enctype="multipart/form-data" class="space-y-5">
 
             <!-- Hidden timezone field populated by JS -->
             <input type="hidden" id="timezone" name="timezone" value="America/Los_Angeles">
@@ -73,16 +101,29 @@
                 </div>
             </div>
 
-            <!-- PDF upload -->
+            <!-- PDF/photo upload. `multiple` lets a library multi-select add
+                 several photos at once; the JS below also accumulates
+                 one-at-a-time camera shots (each "Take Photo" only ever
+                 returns a single image) up to MAX_PHOTOS, and rebuilds this
+                 input's FileList before submit so the plain form POST still
+                 carries every accumulated photo under the same field name. -->
             <div class="custom-file-input" id="drop-zone">
-                <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf,image/png,image/jpeg,image/heic,image/heif" required>
-                <span class="custom-file-input-text">Click or drag a PDF or photo of your schedule here</span>
+                <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf,image/png,image/jpeg,image/heic,image/heif" multiple>
+                <span class="custom-file-input-text" id="file-input-label">Click or drag a PDF or photo of your schedule here</span>
             </div>
+
+            <!-- Selected photo thumbnails, shown once 1+ photos are added -->
+            <div id="photo-thumbs" class="hidden grid grid-cols-4 gap-2"></div>
+            <p id="photo-hint" class="hidden text-xs text-gray-400">
+                Multiple pages or screens of the same schedule? Tap above to add more.
+            </p>
+
             {% if pdf_error %}
             <div class="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-3">
                 {{ pdf_error }}
             </div>
             {% endif %}
+            <div id="js-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-3"></div>
 
             <button type="submit"
                 class="w-full bg-sky-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-sky-700 transition-colors duration-300 text-lg">
@@ -139,16 +180,140 @@
             panel.classList.toggle('hidden');
         });
 
-        // --- File input label update ---
+        // --- File input: accumulate up to MAX_PHOTOS photos, or one PDF ---
+        // Mobile camera capture only ever returns one photo per "Take
+        // Photo" tap, even with `multiple` set on the input -- that's a
+        // browser/OS limitation, not something an attribute fixes. So we
+        // keep our own running list of File objects across repeated
+        // selections and rebuild the input's FileList (via DataTransfer)
+        // before submit, rather than relying on the browser to accumulate
+        // them for us.
+        const MAX_PHOTOS = 4;
         const fileInput = document.getElementById('pdfFile');
-        const fileInputText = document.querySelector('.custom-file-input-text');
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                fileInputText.textContent = e.target.files[0].name;
-                fileInput.parentNode.style.borderColor = '#0ea5e9';
-            } else {
-                fileInputText.textContent = 'Click or drag a PDF or photo of your schedule here';
+        const fileInputLabel = document.getElementById('file-input-label');
+        const thumbsEl = document.getElementById('photo-thumbs');
+        const hintEl = document.getElementById('photo-hint');
+        const jsErrorEl = document.getElementById('js-error');
+        let selectedFiles = [];
+
+        function isPdf(file) {
+            return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+        }
+        function showJsError(msg) {
+            jsErrorEl.textContent = msg;
+            jsErrorEl.classList.remove('hidden');
+        }
+        function clearJsError() {
+            jsErrorEl.classList.add('hidden');
+            jsErrorEl.textContent = '';
+        }
+
+        function syncInputFiles() {
+            const dt = new DataTransfer();
+            selectedFiles.forEach(f => dt.items.add(f));
+            fileInput.files = dt.files;
+        }
+
+        function renderSelection() {
+            thumbsEl.innerHTML = '';
+
+            if (selectedFiles.length === 0) {
+                thumbsEl.classList.add('hidden');
+                hintEl.classList.add('hidden');
+                fileInputLabel.textContent = 'Click or drag a PDF or photo of your schedule here';
                 fileInput.parentNode.style.borderColor = '#ccc';
+                return;
+            }
+
+            fileInput.parentNode.style.borderColor = '#0ea5e9';
+
+            if (selectedFiles.length === 1 && isPdf(selectedFiles[0])) {
+                fileInputLabel.textContent = selectedFiles[0].name;
+                thumbsEl.classList.add('hidden');
+                hintEl.classList.add('hidden');
+                return;
+            }
+
+            fileInputLabel.textContent =
+                `${selectedFiles.length} photo${selectedFiles.length > 1 ? 's' : ''} selected`;
+            thumbsEl.classList.remove('hidden');
+
+            if (selectedFiles.length < MAX_PHOTOS) {
+                hintEl.textContent =
+                    `Multiple pages or screens of the same schedule? Tap above to add up to ${MAX_PHOTOS - selectedFiles.length} more.`;
+                hintEl.classList.remove('hidden');
+            } else {
+                hintEl.classList.add('hidden');
+            }
+
+            selectedFiles.forEach((file, idx) => {
+                const tile = document.createElement('div');
+                tile.className = 'photo-thumb';
+
+                const img = document.createElement('img');
+                const url = URL.createObjectURL(file);
+                img.src = url;
+                img.onload = () => URL.revokeObjectURL(url);
+                img.alt = `Photo ${idx + 1}`;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.textContent = '\u00d7';
+                removeBtn.setAttribute('aria-label', 'Remove this photo');
+                removeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    selectedFiles.splice(idx, 1);
+                    syncInputFiles();
+                    renderSelection();
+                });
+
+                tile.appendChild(img);
+                tile.appendChild(removeBtn);
+                thumbsEl.appendChild(tile);
+            });
+        }
+
+        fileInput.addEventListener('click', (e) => {
+            // At the cap already -- block the picker rather than let a
+            // new pick silently get dropped by the change handler below.
+            if (selectedFiles.length >= MAX_PHOTOS) {
+                e.preventDefault();
+                showJsError(`You can attach up to ${MAX_PHOTOS} photos. Remove one first to add another.`);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const newFiles = Array.from(e.target.files || []);
+            if (newFiles.length === 0) return;
+            clearJsError();
+
+            const newHasPdf = newFiles.some(isPdf);
+            const existingHasPdf = selectedFiles.some(isPdf);
+
+            if (newHasPdf || existingHasPdf) {
+                // PDFs are single-document uploads -- never mixed with
+                // photos or with each other. The newest pick wins.
+                if (newFiles.length > 1 || (existingHasPdf && selectedFiles.length > 0 && !newHasPdf)) {
+                    showJsError('Please upload one PDF at a time, with no other photos attached.');
+                }
+                selectedFiles = [newFiles[newFiles.length - 1]];
+            } else {
+                const room = MAX_PHOTOS - selectedFiles.length;
+                if (newFiles.length > room) {
+                    showJsError(`Only added ${room} of those -- ${MAX_PHOTOS} photos max per upload.`);
+                }
+                selectedFiles = selectedFiles.concat(newFiles.slice(0, room));
+            }
+
+            syncInputFiles();
+            renderSelection();
+        });
+
+        document.getElementById('upload-form').addEventListener('submit', (e) => {
+            if (selectedFiles.length === 0) {
+                e.preventDefault();
+                showJsError('Please select a PDF or at least one photo to upload.');
             }
         });
     </script>

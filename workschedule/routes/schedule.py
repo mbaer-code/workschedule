@@ -16,11 +16,11 @@ from flask import (Blueprint, render_template, request, redirect,
 from werkzeug.utils import secure_filename
 
 from workschedule.services.stripe_service import create_checkout_session
-from workschedule.services.security import check_upload, check_text, SecurityError
+from workschedule.services.security import check_upload, check_upload_batch, check_text, SecurityError
 from workschedule.services.parser_limits import limits
 from workschedule.services.pdf_parser import (
     parse_document_with_summary,
-    parse_image_with_summary,
+    parse_images_with_summary,
     shift_date_sort_key,
 )
 
@@ -219,9 +219,15 @@ def upload_schedule():
 
 @schedule_bp.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
-    if 'pdfFile' not in request.files:
+    # getlist (not request.files['pdfFile']) so multiple photos of the same
+    # document — up to limits.max_photos_per_upload — can be submitted
+    # under the same field name in one request. A single-file submission
+    # still works identically: getlist just returns a one-item list.
+    uploaded_files = [f for f in request.files.getlist('pdfFile') if f and f.filename]
+
+    if not uploaded_files:
         logger.warning(
-            "[upload_pdf] No 'pdfFile' field in request.files -- the "
+            "[upload_pdf] No usable files in request.files['pdfFile'] -- the "
             "browser's upload never included a file. form keys: "
             f"{list(request.form.keys())}, files keys: {list(request.files.keys())}"
         )
@@ -234,15 +240,12 @@ def upload_pdf():
             ),
         )
 
-    pdf_file = request.files['pdfFile']
     timezone = request.form.get('timezone', 'America/Los_Angeles')
 
-    if not pdf_file or pdf_file.filename == '':
-        return render_template("upload_schedule_new.html",
-                               pdf_error="Please select input for processing.")
-
     try:
-        pdf_contents = pdf_file.read()
+        read_files = []  # list of (bytes, filename, mimetype), in order
+        for f in uploaded_files:
+            read_files.append((f.read(), secure_filename(f.filename), f.content_type))
     except Exception as e:
         logger.error(f"[upload_pdf] Error reading uploaded file bytes: {e}")
         return render_template(
@@ -256,11 +259,10 @@ def upload_pdf():
     # --- Security gate (fast, free, runs before any API call) ---
     # kind is detected from magic bytes, not the filename/MIME the browser
     # sent — those are easily spoofed and only used for the earlier fail-fast checks.
+    # Rate limiting is applied once for the whole batch, not once per file.
     try:
-        kind = check_upload(
-            file_bytes=pdf_contents,
-            filename=secure_filename(pdf_file.filename),
-            mimetype=pdf_file.content_type,
+        kinds = check_upload_batch(
+            files=read_files,
             ip_address=_client_ip(),
             session_id=session.get('user_id') or _client_ip(),
         )
@@ -268,18 +270,26 @@ def upload_pdf():
         logger.warning(f"[upload_pdf] Security check failed: {e}")
         return render_template("upload_schedule_new.html", pdf_error=str(e))
 
+    kind = kinds[0]  # check_upload_batch already rejected mixed pdf+image batches
+
     try:
         if kind == "image":
-            try:
-                processed_image = prepare_image_for_ai(pdf_contents)
-            except ValueError as e:
-                return render_template("upload_schedule_new.html", pdf_error=str(e))
+            processed_images = []
+            for file_bytes, filename, _mimetype in read_files:
+                try:
+                    processed_images.append(
+                        (prepare_image_for_ai(file_bytes), "image/jpeg"))
+                except ValueError as e:
+                    return render_template("upload_schedule_new.html", pdf_error=str(e))
 
-            # Single vision call returns both events and summary (1 API call)
-            parsed_entries, doc_summary = parse_image_with_summary(
-                processed_image, media_type="image/jpeg")
-            logger.info(f"[upload_pdf] Image document detected: {doc_summary}")
+            # Single vision call across all images returns both events and
+            # summary (1 API call regardless of how many photos were sent)
+            parsed_entries, doc_summary = parse_images_with_summary(processed_images)
+            logger.info(
+                f"[upload_pdf] Image document detected ({len(processed_images)} "
+                f"photo(s)): {doc_summary}")
         else:
+            pdf_contents = read_files[0][0]
             # Extract text from PDF
             extracted_text = extract_text_from_pdf(pdf_contents)
 

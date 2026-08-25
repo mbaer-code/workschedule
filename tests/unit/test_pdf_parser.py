@@ -18,6 +18,7 @@ from workschedule.services.pdf_parser import (
     parse_document,
     get_document_summary,
     parse_image_with_summary,
+    parse_images_with_summary,
     shift_date_sort_key,
     _is_valid_date,
     _is_valid_time,
@@ -482,6 +483,76 @@ class TestParseImage:
             events, summary = parse_image_with_summary(b"")
             assert events == []
             mock_client.assert_not_called()
+
+
+class TestParseImagesMulti:
+    """
+    Multi-photo path: several pages/screens of the same document merged
+    in a single vision call. parse_image_with_summary (singular) is kept
+    as a back-compat wrapper around this for one-image callers.
+    """
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_multi_image_single_api_call(self, mock_client):
+        """Confirms 4 photos still cost exactly 1 vision call, not 4."""
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(json.dumps(MOCK_IMAGE_RESPONSE))
+
+        images = [(FAKE_JPEG_BYTES, "image/jpeg")] * 4
+        events, summary = parse_images_with_summary(images)
+
+        assert client.messages.create.call_count == 1
+        assert len(events) == 1
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_multi_image_sends_one_content_block_per_image(self, mock_client):
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(json.dumps(MOCK_IMAGE_RESPONSE))
+
+        images = [(FAKE_JPEG_BYTES, "image/jpeg"), (FAKE_JPEG_BYTES, "image/png"), (FAKE_JPEG_BYTES, "image/jpeg")]
+        parse_images_with_summary(images)
+
+        sent_content = client.messages.create.call_args.kwargs['messages'][0]['content']
+        image_blocks = [b for b in sent_content if b['type'] == 'image']
+        text_blocks = [b for b in sent_content if b['type'] == 'text']
+        assert len(image_blocks) == 3
+        assert len(text_blocks) == 1
+        # Multi-image prompt should reference merging across images, not
+        # the single-image prompt.
+        assert "SAME document" in text_blocks[0]['text']
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_single_image_uses_single_image_prompt(self, mock_client):
+        """A 1-image call should still read like the original single-image prompt."""
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(json.dumps(MOCK_IMAGE_RESPONSE))
+
+        parse_images_with_summary([(FAKE_JPEG_BYTES, "image/jpeg")])
+
+        sent_content = client.messages.create.call_args.kwargs['messages'][0]['content']
+        text_block = next(b for b in sent_content if b['type'] == 'text')
+        assert "SAME document" not in text_block['text']
+
+    def test_empty_list_returns_empty_no_api_call(self):
+        with patch('workschedule.services.pdf_parser._client') as mock_client:
+            events, summary = parse_images_with_summary([])
+            assert events == []
+            mock_client.assert_not_called()
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_single_image_wrapper_still_works(self, mock_client):
+        """parse_image_with_summary (singular) is a thin wrapper — same result."""
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(json.dumps(MOCK_IMAGE_RESPONSE))
+
+        events, summary = parse_image_with_summary(FAKE_JPEG_BYTES, media_type="image/jpeg")
+
+        assert len(events) == 1
+        assert client.messages.create.call_count == 1
 
 
 class TestShiftDateSortKey:
