@@ -694,6 +694,97 @@ class TestRealWorkforceToolsSchedule:
         assert _collapse_split_date_labels(inline_text) == inline_text
 
 
+class TestSyntheticGridSchedule:
+    """
+    Synthetic fixture, deliberately structured to be the OPPOSITE of
+    workforce_tools_schedule_composite.pdf: a single plain table, numeric
+    MM/DD/YYYY dates, no repeated title/header banner anywhere in the
+    document. This exists to check that the header/title-avoidance rules
+    added to the vision prompt this session (don't extract the document's
+    own title as an event; don't source a shift's date from the title's
+    date range) don't cause any false suppression when there's no such
+    banner present at all to confuse — every real test this session used
+    the same one banner-heavy document, so this is real structural
+    coverage that was previously missing entirely.
+
+    Not a real employer's export — built to test structural diversity,
+    not to imitate any specific company's actual scheduling software.
+    """
+
+    FIXTURE_PATH = os.path.join(FIXTURES_DIR, 'generic_grid_schedule.pdf')
+
+    def _load_bytes(self) -> bytes:
+        with open(self.FIXTURE_PATH, 'rb') as f:
+            return f.read()
+
+    def test_fixture_exists(self):
+        assert os.path.exists(self.FIXTURE_PATH)
+
+    def test_passes_security_check_as_pdf(self):
+        data = self._load_bytes()
+        kind = check_upload(
+            data, 'generic_grid_schedule.pdf', 'application/pdf',
+            ip_address='127.0.0.1', session_id='test-grid'
+        )
+        assert kind == 'pdf'
+
+    def test_text_extraction_captures_shift_details(self):
+        data = self._load_bytes()
+        text = extract_text_from_pdf(data)
+        assert '04/06/2026' in text
+        assert '8:00 AM - 4:00 PM' in text
+        assert 'OFF' in text
+
+    def test_split_date_label_collapse_does_not_fire(self):
+        """This format doesn't use the split-label date pattern (dates
+        and details share one table row) -- the collapse must leave it
+        untouched, not misinterpret table rows as split labels."""
+        data = self._load_bytes()
+        text = extract_text_from_pdf(data)
+        assert _collapse_split_date_labels(text) == text
+
+
+class TestSyntheticRosterSchedule:
+    """
+    Synthetic fixture covering a structurally different case: multiple
+    named people with separate shifts under one date (a team roster),
+    including a date with nobody scheduled. This is the multi-name-per-
+    date shape flagged back in July (a real user's schedule listed
+    multiple names per date) as never actually implemented -- the
+    current schema only expects one shift per event. This fixture
+    exists so that gap has a concrete regression target once work on it
+    starts, rather than staying an undocumented known limitation.
+
+    Not a real employer's export — built to test structural diversity,
+    not to imitate any specific company's actual scheduling software.
+    """
+
+    FIXTURE_PATH = os.path.join(FIXTURES_DIR, 'roster_multi_name_schedule.pdf')
+
+    def _load_bytes(self) -> bytes:
+        with open(self.FIXTURE_PATH, 'rb') as f:
+            return f.read()
+
+    def test_fixture_exists(self):
+        assert os.path.exists(self.FIXTURE_PATH)
+
+    def test_passes_security_check_as_pdf(self):
+        data = self._load_bytes()
+        kind = check_upload(
+            data, 'roster_multi_name_schedule.pdf', 'application/pdf',
+            ip_address='127.0.0.1', session_id='test-roster'
+        )
+        assert kind == 'pdf'
+
+    def test_text_extraction_captures_multiple_names_per_date(self):
+        data = self._load_bytes()
+        text = extract_text_from_pdf(data)
+        assert 'A. Chen' in text
+        assert 'R. Diaz' in text
+        assert 'J. Osei' in text
+        assert '(no one scheduled)' in text
+
+
 # ---------------------------------------------------------------------------
 # Live integration test (only runs with LIVE_TEST=1 in environment)
 # ---------------------------------------------------------------------------
