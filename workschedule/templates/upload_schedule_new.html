@@ -111,6 +111,9 @@
                 <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf,image/png,image/jpeg,image/heic,image/heif" multiple>
                 <span class="custom-file-input-text" id="file-input-label">Click or drag a PDF or photo of your schedule here</span>
             </div>
+            <p id="photo-intro" class="text-xs text-gray-400">
+                Schedule spans multiple pages or screens? Tap <span class="font-medium">Take Photo</span> up to 4 times to add each one &mdash; they'll be combined into a single schedule.
+            </p>
 
             <!-- Selected photo thumbnails, shown once 1+ photos are added -->
             <div id="photo-thumbs" class="hidden grid grid-cols-4 gap-2"></div>
@@ -202,6 +205,7 @@
         const fileInputLabel = document.getElementById('file-input-label');
         const thumbsEl = document.getElementById('photo-thumbs');
         const hintEl = document.getElementById('photo-hint');
+        const introEl = document.getElementById('photo-intro');
         const jsErrorEl = document.getElementById('js-error');
         let selectedPhotos = []; // [{ id, file }], id is the IndexedDB key
 
@@ -275,12 +279,14 @@
             if (selectedPhotos.length === 0) {
                 thumbsEl.classList.add('hidden');
                 hintEl.classList.add('hidden');
+                introEl.classList.remove('hidden');
                 fileInputLabel.textContent = 'Click or drag a PDF or photo of your schedule here';
                 fileInput.parentNode.style.borderColor = '#ccc';
                 return;
             }
 
             fileInput.parentNode.style.borderColor = '#0ea5e9';
+            introEl.classList.add('hidden');
 
             if (selectedPhotos.length === 1 && isPdf(selectedPhotos[0].file)) {
                 fileInputLabel.textContent = selectedPhotos[0].file.name;
