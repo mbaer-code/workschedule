@@ -112,7 +112,7 @@
                 <span class="custom-file-input-text" id="file-input-label">Click or drag a PDF or photo of your schedule here</span>
             </div>
             <p id="photo-intro" class="text-xs text-gray-400">
-                Schedule spans multiple pages or screens? Tap <span class="font-medium">Take Photo</span> up to 4 times to add each one &mdash; they'll be combined into a single schedule.
+                Schedule spans multiple pages or screens? Tap <span class="font-medium">Take Photo</span> up to 5 times to add each one &mdash; they'll be combined into a single schedule.
             </p>
 
             <!-- Selected photo thumbnails, shown once 1+ photos are added -->
@@ -198,7 +198,7 @@
         // page load, so "take photo" 4 times in a row actually builds up
         // to 4 photos instead of silently losing everything but the last
         // one each time the page comes back.
-        const MAX_PHOTOS = 4;
+        const MAX_PHOTOS = 5;
         const DB_NAME = 'workschedule-upload-photos';
         const STORE_NAME = 'photos';
         const fileInput = document.getElementById('pdfFile');

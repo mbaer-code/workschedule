@@ -152,7 +152,7 @@ class TestCheckUploadBatch:
             check_upload_batch([])
 
     def test_batch_over_max_photos_rejected(self):
-        files = [(_real_png_bytes(), f'IMG_{i}.png', 'image/png') for i in range(5)]
+        files = [(_real_png_bytes(), f'IMG_{i}.png', 'image/png') for i in range(6)]
         with pytest.raises(SecurityError):
             check_upload_batch(files)
 
