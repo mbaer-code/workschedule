@@ -465,6 +465,80 @@ _MONTH_ABBR = {m: i for i, m in enumerate(
     ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], start=1)}
 
+_BARE_DAY_NUM_RE = re.compile(r"^\d{1,2}$")
+
+
+def _collapse_split_date_labels(text: str) -> str:
+    """
+    Some schedule exports (confirmed: Workforce Tools) put each date on
+    two separate lines — a bare month-abbreviation line, then a bare
+    day-number line — with any shift details (if there are any) following
+    on subsequent lines until the next such pair:
+
+        Mar
+        4
+        Mar
+        5
+        Mar
+        6
+        Mar
+        7
+        Mar
+        8
+        4:00 PM - 8:00 PM [4:00]
+        0660 - Store 026 - Plumbing & Bath Associate
+
+    Correctly pairing a shift with its OWN date (not an earlier blank
+    one) then requires tracking position across a long, noisy run of
+    labels purely from prose instructions — asking a language model to
+    count reliably like this is fragile, and it has produced repeated
+    real misattribution bugs (a shift landing on an earlier blank date
+    instead of its own) on actual test documents. This deterministically
+    collapses each date + its details onto a single unambiguous line
+    before either AI pass ever sees the text, e.g. the block above becomes:
+
+        Mar 04: (no shift)
+        Mar 05: (no shift)
+        Mar 06: (no shift)
+        Mar 07: (no shift)
+        Mar 08: 4:00 PM - 8:00 PM [4:00] 0660 - Store 026 - Plumbing & Bath Associate
+
+    Only fires when the pattern actually repeats (2+ occurrences) — a
+    document that doesn't use this split-label layout (inline table
+    rows, prose, etc.) passes through completely unchanged.
+    """
+    lines = text.split("\n")
+
+    date_positions = []
+    for i in range(len(lines) - 1):
+        if lines[i].strip() in _MONTH_ABBR and _BARE_DAY_NUM_RE.match(lines[i + 1].strip()):
+            date_positions.append(i)
+
+    if len(date_positions) < 2:
+        return text
+
+    out_chunks = []
+    for idx, pos in enumerate(date_positions):
+        if idx == 0 and pos > 0:
+            # Preamble before the first date label (headers, "No shifts
+            # scheduled in this range" notices, etc.) — keep as-is.
+            out_chunks.append("\n".join(lines[:pos]))
+
+        month = lines[pos].strip()
+        day = lines[pos + 1].strip().zfill(2)
+        detail_start = pos + 2
+        detail_end = date_positions[idx + 1] if idx + 1 < len(date_positions) else len(lines)
+        detail_lines = [l.strip() for l in lines[detail_start:detail_end] if l.strip()]
+        detail_text = " ".join(detail_lines) if detail_lines else "(no shift)"
+        out_chunks.append(f"{month} {day}: {detail_text}")
+
+    collapsed = "\n".join(out_chunks)
+    logger.info(
+        f"[pdf_parser] Collapsed {len(date_positions)} split-label dates "
+        f"into single lines before AI extraction"
+    )
+    return collapsed
+
 
 def shift_date_sort_key(value: str) -> tuple:
     """
@@ -603,6 +677,11 @@ def parse_document_with_summary(text: str) -> tuple:
     if not text or len(text.strip()) < 20:
         logger.warning("[pdf_parser] Text too short to parse")
         return [], ""
+
+    # Deterministic fix for a real recurring bug class (see docstring) —
+    # runs before either AI pass, so both the density estimate and the
+    # extraction call see the same unambiguous text.
+    text = _collapse_split_date_labels(text)
 
     # Pre-flight density check — free, no API call. Catches documents
     # like a multi-terminal port schedule (a time on nearly every line)

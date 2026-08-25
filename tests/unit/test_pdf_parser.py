@@ -20,6 +20,7 @@ from workschedule.services.pdf_parser import (
     parse_image_with_summary,
     parse_images_with_summary,
     shift_date_sort_key,
+    _collapse_split_date_labels,
     _is_valid_date,
     _is_valid_time,
     _is_meaningful_title,
@@ -648,6 +649,49 @@ class TestRealWorkforceToolsSchedule:
         assert '0660 - Store 026 - Plumbing & Bath Associate' in text
         assert '6:00 PM - 10:00 PM' in text
         assert 'No shifts are scheduled within the timeframe' in text
+
+    def test_split_date_labels_collapse_to_correct_pairing(self):
+        """
+        Real production bug (found via manual testing, not caught by the
+        tests above): this PDF's raw text puts each date on two separate
+        lines (a bare "Mar" line, then a bare day-number line), with runs
+        of several consecutive blank dates between real shifts. Asking
+        the model to track "this shift belongs to the label N lines back"
+        via prose instructions alone proved unreliable on this real
+        document — shifts kept landing on an earlier blank date instead
+        of their own. _collapse_split_date_labels() removes that ambiguity
+        deterministically, in code, before either AI pass ever sees the
+        text. This asserts the exact known-correct pairing directly,
+        independent of any model behavior.
+        """
+        data = self._load_bytes()
+        text = extract_text_from_pdf(data)
+        collapsed = _collapse_split_date_labels(text)
+
+        # Real shifts -- each date paired with ITS OWN shift, not an
+        # earlier blank date's.
+        assert 'Mar 02: 6:00 PM - 10:00 PM' in collapsed
+        assert 'Mar 03: 6:00 PM - 10:00 PM' in collapsed
+        assert 'Mar 08: 4:00 PM - 8:00 PM' in collapsed
+        assert 'Mar 09: 6:00 PM - 10:00 PM' in collapsed
+        assert 'Mar 11: 6:00 PM - 10:00 PM' in collapsed
+        assert 'Mar 12: 6:00 PM - 10:00 PM' in collapsed
+
+        # Blank dates explicitly marked as such -- not silently dropped,
+        # and not carrying a shift that belongs to a later date.
+        for blank_day in ('04', '05', '06', '07', '10', '13', '14', '15'):
+            assert f'Mar {blank_day}: (no shift)' in collapsed
+
+    def test_collapse_leaves_non_split_label_text_unchanged(self):
+        """The collapse must not fire (or alter anything) on formats that
+        don't use this specific two-line date pattern -- e.g. plain prose
+        or inline table rows with the date and details on one line."""
+        inline_text = (
+            "Mon, Sep 08  11:30 AM - 8:00 PM  Plumbing & Bath  0660\n"
+            "Tue, Sep 09  no shift\n"
+            "Wed, Sep 10  1:00 PM - 9:00 PM  Plumbing & Bath  0660\n"
+        )
+        assert _collapse_split_date_labels(inline_text) == inline_text
 
 
 # ---------------------------------------------------------------------------
