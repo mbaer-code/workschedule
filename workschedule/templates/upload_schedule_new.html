@@ -245,7 +245,7 @@
             return new Promise((resolve, reject) => {
                 const req = db.transaction(STORE_NAME, 'readwrite')
                     .objectStore(STORE_NAME)
-                    .add({ name: file.name, type: file.type, blob: file });
+                    .add({ name: file.name, type: file.type, blob: file, addedAt: Date.now() });
                 req.onsuccess = () => resolve(req.result); // new record's id
                 req.onerror = () => reject(req.error);
             });
@@ -340,11 +340,37 @@
 
         // Restore anything left over from a page reload (e.g. the browser
         // reloaded this tab while the camera app was in the foreground).
+        // Only restores RECENT records -- a stale record from an earlier,
+        // abandoned upload (never submitted, browser closed mid-test, a
+        // completely separate previous session) should never silently
+        // reappear and pollute a new upload attempt days or weeks later.
+        // A camera hand-off reload happens within seconds, so anything
+        // older than a few minutes is treated as abandoned and purged.
+        const RESTORE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
         (async function restoreFromDb() {
             try {
                 const records = await dbGetAllPhotos();
                 if (records.length === 0) return;
-                selectedPhotos = records.map(r => ({
+
+                const now = Date.now();
+                const fresh = [];
+                const stale = [];
+                for (const r of records) {
+                    const age = now - (r.addedAt || 0);
+                    // Records written before this fix has no addedAt --
+                    // treat as stale rather than risk restoring something
+                    // with no way to know its real age.
+                    (r.addedAt && age < RESTORE_MAX_AGE_MS ? fresh : stale).push(r);
+                }
+
+                if (stale.length > 0) {
+                    console.warn(`[upload] Discarding ${stale.length} stale photo(s) `
+                        + `from a previous, abandoned upload`);
+                    await Promise.all(stale.map(r => dbDeletePhoto(r.id).catch(() => {})));
+                }
+
+                if (fresh.length === 0) return;
+                selectedPhotos = fresh.map(r => ({
                     id: r.id,
                     file: new File([r.blob], r.name, { type: r.type }),
                 }));
@@ -370,19 +396,27 @@
             clearJsError();
 
             const newHasPdf = newFiles.some(isPdf);
-            const existingHasPdf = selectedPhotos.some(p => isPdf(p.file));
 
-            if (newHasPdf || existingHasPdf) {
-                // PDFs are single-document uploads -- never mixed with
-                // photos or with each other. The newest pick wins.
-                if (newFiles.length > 1 || (existingHasPdf && selectedPhotos.length > 0 && !newHasPdf)) {
+            if (newHasPdf) {
+                // A PDF is always a single-document upload -- replaces
+                // whatever was selected before (a PDF or accumulated
+                // photos), since the person is switching to PDF mode.
+                if (newFiles.length > 1) {
                     showJsError('Please upload one PDF at a time, with no other photos attached.');
                 }
                 try { await dbClearPhotos(); } catch (err) { console.error(err); }
-                const pdfFile = newFiles[newFiles.length - 1];
+                const pdfFile = newFiles.find(isPdf);
                 const id = await dbAddPhoto(pdfFile).catch(err => { console.error(err); return undefined; });
                 selectedPhotos = [{ id, file: pdfFile }];
             } else {
+                // Adding photo(s). If a PDF was previously selected (this
+                // session, or restored from an earlier one), replace it --
+                // picking photos now means photos are what's wanted, not a
+                // silent discard of the new selection down to one file.
+                if (selectedPhotos.some(p => isPdf(p.file))) {
+                    try { await dbClearPhotos(); } catch (err) { console.error(err); }
+                    selectedPhotos = [];
+                }
                 const room = MAX_PHOTOS - selectedPhotos.length;
                 if (newFiles.length > room) {
                     showJsError(`Only added ${room} of those -- ${MAX_PHOTOS} photos max per upload.`);
