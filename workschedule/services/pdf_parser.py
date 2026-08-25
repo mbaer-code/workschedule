@@ -334,16 +334,17 @@ def _get_context_and_events_from_images(images: list) -> dict:
             current_year=datetime.now().year, n=len(images))
     content.append({"type": "text", "text": prompt})
 
-    # Debug visibility for the multi-image path: this is currently our
-    # only way to see what the model actually returned before our own
-    # validation/sorting touches it, since the source photos themselves
-    # are never persisted anywhere (by design -- see privacy copy). Logs
-    # byte sizes only, never image bytes; on Cloud Run this ships to
-    # Cloud Logging automatically via stdout, no extra infra needed.
-    if len(images) > 1:
-        sizes = [len(b) for b, _mt in images]
-        logger.info(f"[pdf_parser] Multi-image call: {len(images)} image(s), "
-                    f"sizes={sizes} bytes")
+    # Debug visibility: this is currently our only way to see what the
+    # model actually returned before our own validation/sorting touches
+    # it, since source photos are never persisted anywhere (by design --
+    # see privacy copy). Logs byte sizes only, never image bytes; on
+    # Cloud Run this ships to Cloud Logging automatically via stdout, no
+    # extra infra needed. Fires for single photos too, not just
+    # multi-image batches -- a single fuzzy/blurry photo hallucinating
+    # times is a real failure mode on its own, independent of merging.
+    sizes = [len(b) for b, _mt in images]
+    logger.info(f"[pdf_parser] Image call: {len(images)} image(s), "
+                f"sizes={sizes} bytes")
 
     try:
         response = _client().messages.create(
@@ -352,12 +353,11 @@ def _get_context_and_events_from_images(images: list) -> dict:
             messages=[{"role": "user", "content": content}],
         )
         raw = response.content[0].text.strip()
-        if len(images) > 1:
-            # Full raw response, before markdown-fence stripping or JSON
-            # parsing -- if dates/times come out wrong, this tells us
-            # whether the model itself hallucinated them or something
-            # downstream (sort/validate) corrupted otherwise-correct output.
-            logger.info(f"[pdf_parser] Multi-image raw model response: {raw}")
+        # Full raw response, before markdown-fence stripping or JSON
+        # parsing -- if dates/times come out wrong, this tells us whether
+        # the model itself hallucinated them or something downstream
+        # (sort/validate) corrupted otherwise-correct output.
+        logger.info(f"[pdf_parser] Image raw model response: {raw}")
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"\n?```$", "", raw)
         return json.loads(raw)
