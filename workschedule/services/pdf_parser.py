@@ -428,7 +428,7 @@ Do not interpret, reformat, merge lines together, or omit anything you can read.
 
 If any text is not clearly legible, write [illegible] on that line rather than guessing what it might say. Do not invent, complete, or infer any text you cannot actually read.
 
-Output ONLY the transcribed text — no commentary, no markdown formatting, no explanation, nothing before or after it."""
+Output ONLY the literal transcribed text — nothing else. Do NOT add a summary, description, or explanation of what the document or image shows (e.g. never add a sentence like "The image shows a schedule with..."), even as the very last line. The output must end immediately after the last piece of text you actually transcribed from the image."""
 
 MULTI_IMAGE_TRANSCRIBE_PROMPT = """Transcribe ALL text visible in each of the {n} images below, exactly as it appears in each one. Preserve each image's original line breaks and reading order (top to bottom, left to right) as faithfully as you can — this is a literal transcription task, not a summary.
 
@@ -438,7 +438,7 @@ If any text in an image is not clearly legible, write [illegible] on that line r
 
 Output each image's transcription in order, separated by a line containing exactly: ---IMAGE BREAK---
 
-Output ONLY the transcribed text and image-break markers — no commentary, no markdown formatting, no explanation, nothing before or after it."""
+Output ONLY the literal transcribed text and image-break markers — nothing else. Do NOT add a summary, description, or explanation of what the document or images show (e.g. never add a sentence like "The image shows a schedule with..."), even as the very last line. The output must end immediately after the last piece of text you actually transcribed from the images."""
 
 
 def _transcribe_images_to_text(images: list) -> str:
