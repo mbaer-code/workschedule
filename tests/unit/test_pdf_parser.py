@@ -614,19 +614,6 @@ class TestParseImagesViaTranscription:
         assert dates == ['Mon, Mar 02', 'Tue, Mar 03', 'Sun, Mar 08']
 
     @patch('workschedule.services.pdf_parser._client')
-    def test_transcription_call_uses_temperature_zero(self, mock_client):
-        """Determinism matters here specifically -- real testing showed
-        the same unmodified photo producing different wrong answers
-        across repeated uploads."""
-        client = MagicMock()
-        mock_client.return_value = client
-        client.messages.create.return_value = _mock_response("some text")
-
-        _transcribe_images_to_text([(FAKE_JPEG_BYTES, "image/jpeg")])
-
-        assert client.messages.create.call_args.kwargs['temperature'] == 0
-
-    @patch('workschedule.services.pdf_parser._client')
     def test_multi_image_transcription_strips_break_markers(self, mock_client):
         client = MagicMock()
         mock_client.return_value = client

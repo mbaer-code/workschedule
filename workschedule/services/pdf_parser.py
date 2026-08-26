@@ -121,7 +121,6 @@ def _get_document_context(text: str) -> dict:
         response = _client().messages.create(
             model=MODEL,
             max_tokens=512,
-            temperature=0,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = response.content[0].text.strip()
@@ -193,7 +192,6 @@ def _extract_events(text: str, context: dict) -> list:
         response = _client().messages.create(
             model=MODEL,
             max_tokens=8192,
-            temperature=0,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = response.content[0].text.strip()
@@ -360,7 +358,6 @@ def _get_context_and_events_from_images(images: list) -> dict:
         response = _client().messages.create(
             model=MODEL,
             max_tokens=2048,
-            temperature=0,
             messages=[{"role": "user", "content": content}],
         )
         raw = response.content[0].text.strip()
@@ -487,7 +484,6 @@ def _transcribe_images_to_text(images: list) -> str:
     response = _client().messages.create(
         model=MODEL,
         max_tokens=4096,
-        temperature=0,
         messages=[{"role": "user", "content": content}],
     )
     raw = response.content[0].text.strip()
