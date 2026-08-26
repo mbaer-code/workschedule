@@ -493,6 +493,12 @@ def _transcribe_images_to_text(images: list) -> str:
     raw = response.content[0].text.strip()
     logger.info(f"[pdf_parser] Transcribed {len(images)} image(s), "
                 f"{len(raw)} chars of text")
+    # Full raw transcription -- essential for diagnosing whether a bad
+    # downstream result comes from the transcription itself misreading a
+    # character (garbage in, garbage out to an otherwise-correct
+    # deterministic pipeline) versus something in the pipeline that
+    # processes it afterward.
+    logger.info(f"[pdf_parser] Raw transcription:\n{raw}")
 
     # Multiple images: drop the break markers and just concatenate --
     # _collapse_split_date_labels processes date-label pairs positionally
