@@ -654,6 +654,42 @@ def _normalize_shift_date(value: str) -> str | None:
         # reject than pass through something strptime will choke on.
         return None
     return f"{standard}, {rest}"
+
+
+def _recompute_weekday(date_str: str, year: str) -> str:
+    """
+    The source documents tested this session never contain a weekday name
+    anywhere (only bare month/day, e.g. "Mar 2") — so whatever weekday
+    _normalize_shift_date above passed through was entirely computed by
+    the model itself. Real testing found that wrong: "Tue, Mar 02" /
+    "Wed, Mar 03" for a document confirmed to be 2026, when March 2, 2026
+    is actually a Monday and March 3 a Tuesday — an LLM computing day-of-
+    week arithmetic is no more reliable than it was at the date-pairing
+    problem earlier this session, for the same underlying reason.
+
+    Weekday-from-date is a fully solved, deterministic computation with
+    no ambiguity — there's no reason to trust a guess for it. This
+    recomputes it from the actual month/day (parsed from date_str) and
+    year (from document context), always overwriting whatever weekday
+    the model supplied, correct or not.
+
+    Fails open: if the date/year can't be parsed for any reason (e.g. a
+    non-numeric year, a genuinely invalid calendar date), returns
+    date_str unchanged rather than discarding an otherwise-valid event
+    over this specific guard.
+    """
+    parts = date_str.split(", ", 1)
+    month_day = parts[1] if len(parts) == 2 else parts[0]
+    try:
+        month_str, day_str = month_day.split(" ")
+        month_num = _MONTH_ABBR[month_str]
+        computed = datetime(int(year), month_num, int(day_str))
+    except (KeyError, ValueError):
+        return date_str
+    correct_weekday = computed.strftime("%a")
+    return f"{correct_weekday}, {month_day}"
+
+
 TIME_RE = re.compile(r"^\d{1,2}:\d{2} [AP]M$")   # 12-hour only, e.g. "11:30 AM"
 
 _MONTH_ABBR = {m: i for i, m in enumerate(
@@ -811,7 +847,7 @@ def _validate_events(events: list, context: dict) -> list:
         if normalized_date is None:
             logger.debug(f"[pdf_parser] Bad date: {ev.get('shift_date')!r}")
             continue
-        ev["shift_date"] = normalized_date
+        ev["shift_date"] = _recompute_weekday(normalized_date, year)
         start = ev.get("shift_start", "")
         end = ev.get("shift_end", "")
         if not _is_valid_time(start):

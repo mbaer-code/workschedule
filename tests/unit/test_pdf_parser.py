@@ -265,7 +265,13 @@ class TestParseDocument:
         ]
         result = parse_document("Sep 11 11:30 AM - 8:00 PM Store 0660 Plumbing")
         assert len(result) == 2
-        assert result[0]['shift_date'] == "Wed, Sep 11"
+        # shift_date's weekday is now deterministically recomputed from
+        # year (MOCK_CONTEXT: 2025) + month/day, not trusted from the
+        # model -- MOCK_EVENTS' original "Wed, Sep 11" was never actually
+        # correct (Sep 11, 2025 is a Thursday); this asserts the real
+        # computed value, which is what the code now always produces
+        # regardless of what weekday MOCK_EVENTS states.
+        assert result[0]['shift_date'] == "Thu, Sep 11"
         assert result[0]['shift_start'] == "11:30 AM"
         assert result[0]['department'] == "Plumbing Associate"
 
@@ -340,6 +346,16 @@ class TestParseDocument:
         validator required exactly 3 letters, so a model extracting these
         verbatim from the source produced dates that never made it into
         the output, sometimes zeroing out the whole result.
+
+        The input weekdays below are deliberately arbitrary/wrong (the
+        original test never checked them against a real calendar) —
+        that's fine, since shift_date's weekday is now deterministically
+        recomputed from year + month/day regardless of what the model
+        supplied (see _recompute_weekday), correct or not. This test's
+        real purpose is just confirming non-standard spelling doesn't
+        get the event rejected outright; the expected output below is
+        the actual real-calendar-correct weekday for MOCK_CONTEXT's
+        year (2025), not whatever spelling the input used.
         """
         client = MagicMock()
         mock_client.return_value = client
@@ -357,10 +373,11 @@ class TestParseDocument:
         ]
         result = parse_document("some exam schedule text here for testing")
         assert len(result) == 3
-        # Normalized to the standard 3-letter form ics_generator.py's
-        # strptime("%a, ...") actually requires.
+        # Real 2025 calendar: May 18 = Sunday, May 19 = Monday, May 21 =
+        # Wednesday -- confirmed independently, not just copied from
+        # whatever the code computes.
         dates = {e['shift_date'] for e in result}
-        assert dates == {"Tue, May 19", "Thu, May 21", "Mon, May 18"}
+        assert dates == {"Mon, May 19", "Wed, May 21", "Sun, May 18"}
 
 
 class TestGetDocumentSummary:
@@ -601,11 +618,19 @@ class TestParseImagesViaTranscription:
             {"shift_date": "Sun, Mar 08", "shift_start": "4:00 PM", "shift_end": "8:00 PM",
              "department": "Plumbing & Bath Associate", "store_number": "0660"},
         ]
+        # Own context with year 2026 (not the shared MOCK_CONTEXT, which is
+        # 2025 for an unrelated fixture) -- shift_date's weekday is now
+        # deterministically recomputed from year + month/day (see
+        # _recompute_weekday), not trusted from the model, so the expected
+        # weekdays above must actually be correct for the year used here.
+        # Real-world calendar check: Mar 02 2026 = Monday, Mar 03 = Tuesday,
+        # Mar 08 = Sunday -- matches the values above.
+        context_2026 = dict(MOCK_CONTEXT, year="2026")
         # First call: transcription. Then context pass, then extraction
         # pass (parse_document_with_summary's normal 2-call sequence).
         client.messages.create.side_effect = [
             _mock_response(transcribed_text),
-            _mock_response(json.dumps(MOCK_CONTEXT)),
+            _mock_response(json.dumps(context_2026)),
             _mock_response(json.dumps(expected_events)),
         ]
 
