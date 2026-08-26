@@ -53,6 +53,26 @@ class ExtractionFailedError(Exception):
     what the model returned."""
     pass
 
+
+class AmbiguousPhotoBoundaryError(Exception):
+    """
+    Raised when a multi-photo upload's transcribed text shows a shift's
+    details (a time range) at the very start of one photo's content with
+    no date label of its own in that same photo — meaning the photos'
+    boundaries didn't overlap enough, and the date that shift actually
+    belongs to was never captured by any photo at all.
+
+    Deliberately fails loudly rather than guessing which nearby date
+    label the orphaned shift probably belongs to. A real production case
+    showed exactly this: two photos split mid-row, and the resulting
+    guess (attaching the orphan to the wrong photo's trailing blank date)
+    produced a wrong date, a duplicate, and a missing real shift — three
+    separate errors from one silent guess. With no reliable way to know
+    which date is correct, telling the user to retake the photos with
+    more overlap is more useful than a plausible-looking wrong answer.
+    """
+    pass
+
 # ---------------------------------------------------------------------------
 # Anthropic client (API key from environment)
 # ---------------------------------------------------------------------------
@@ -441,6 +461,51 @@ Output each image's transcription in order, separated by a line containing exact
 Output ONLY the literal transcribed text and image-break markers — nothing else. Do NOT add a summary, description, or explanation of what the document or images show (e.g. never add a sentence like "The image shows a schedule with..."), even as the very last line. The output must end immediately after the last piece of text you actually transcribed from the images."""
 
 
+# A transcribed line that's shift/event details starting right at the top
+# of a photo's content -- a time range like "6:00 PM - 10:00 PM" -- with
+# no date label of its own. Matches the real transcribed format seen in
+# production (times formatted exactly this way by the transcription step).
+_LEADS_WITH_TIME_RANGE_RE = re.compile(
+    r"^\d{1,2}:\d{2}\s*[AP]M\s*-\s*\d{1,2}:\d{2}\s*[AP]M"
+)
+
+
+def _check_for_orphaned_photo_boundary(raw_with_breaks: str, n_images: int):
+    """
+    Deterministic, model-independent check: does any photo (2nd or later)
+    in a multi-photo transcription start with shift details but no date
+    label of its own? That's the exact signature of two photos meeting
+    mid-row -- the date belongs to whichever photo was supposed to show
+    it, and neither one did. No guessing at which nearby date it might
+    be; this only detects the condition and raises with a clear,
+    actionable message. Only meaningful for 2+ images -- a single photo
+    has no boundary to split across.
+    """
+    if n_images < 2:
+        return
+
+    chunks = raw_with_breaks.split("---IMAGE BREAK---")
+    for i, chunk in enumerate(chunks):
+        if i == 0:
+            continue  # first photo has no "previous photo" to have split from
+        lines = [l.strip() for l in chunk.split("\n") if l.strip()]
+        if not lines:
+            continue
+        if _LEADS_WITH_TIME_RANGE_RE.match(lines[0]):
+            logger.warning(
+                f"[pdf_parser] Orphaned shift detail at the start of "
+                f"photo {i + 1} of {n_images} -- no date label in that "
+                f"photo before the shift text: {lines[0]!r}"
+            )
+            raise AmbiguousPhotoBoundaryError(
+                f"Photo {i + 1} appears to start partway through a row, "
+                f"cutting off the date for one of the shifts. Please "
+                f"retake your photos with more overlap between them -- "
+                f"repeat the last visible date/row from one photo at the "
+                f"start of the next -- and upload again."
+            )
+
+
 def _transcribe_images_to_text(images: list) -> str:
     """
     Pure OCR-style transcription of 1+ images -- deliberately asks for
@@ -496,6 +561,11 @@ def _transcribe_images_to_text(images: list) -> str:
     # processes it afterward.
     logger.info(f"[pdf_parser] Raw transcription:\n{raw}")
 
+    # Checked here, before the break markers are stripped below, since
+    # this check needs to know exactly where one photo's content ends
+    # and the next begins.
+    _check_for_orphaned_photo_boundary(raw, len(images))
+
     # Multiple images: drop the break markers and just concatenate --
     # _collapse_split_date_labels processes date-label pairs positionally
     # within the combined text regardless of which image contributed
@@ -521,6 +591,11 @@ def parse_images_via_transcription(images: list) -> tuple:
 
     try:
         text = _transcribe_images_to_text(images)
+    except AmbiguousPhotoBoundaryError:
+        # Let this propagate -- schedule.py's outer handler shows its
+        # message (already written to be user-facing) rather than the
+        # generic "no events found" the except below would produce.
+        raise
     except Exception as e:
         logger.error(f"[pdf_parser] Image transcription failed: {e}")
         return [], ""

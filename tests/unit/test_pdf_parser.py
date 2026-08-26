@@ -21,6 +21,8 @@ from workschedule.services.pdf_parser import (
     parse_images_with_summary,
     parse_images_via_transcription,
     _transcribe_images_to_text,
+    _check_for_orphaned_photo_boundary,
+    AmbiguousPhotoBoundaryError,
     shift_date_sort_key,
     _collapse_split_date_labels,
     _is_valid_date,
@@ -634,6 +636,82 @@ class TestParseImagesViaTranscription:
             events, summary = parse_images_via_transcription([])
             assert events == []
             mock_client.assert_not_called()
+
+
+class TestOrphanedPhotoBoundary:
+    """
+    Real production bug: a 5-photo upload where two photos split mid-row
+    (image 5 started with a bare time range and no date label -- the
+    date it belonged to, Mar 12, was never captured by any photo).
+    Silently attaching that orphaned shift to the nearest preceding date
+    label (image 4's trailing blank "Mar 15") produced three separate
+    errors from one guess: a phantom shift on Mar 15, a duplicate on
+    Mar 10, and a missing real shift on Mar 12.
+
+    Per-decision: don't guess which date an orphan belongs to -- fail
+    clearly and tell the user to retake with more overlap. This is a
+    pure structural check (a time range with no date label before it,
+    right at a photo boundary) with no dependency on model judgment.
+    """
+
+    # Reconstructed from the real production log for this exact bug.
+    REAL_ORPHAN_CASE = (
+        "Mar\n9\n6:00 PM - 10:00 PM [4:00]\n0660 Store 026 - Plumbing & Bath Associate\n"
+        "Mar\n10\n6:00 PM - 10:00 PM [4:00]\n0660 Store 026 - Plumbing & Bath Associate\n"
+        "Mar\n11\n6:00 PM - 10:00 PM [4:00]\n0660 Store 026 - Plumbing & Bath Associate\n"
+        "Mar\n12\nMar\n13\nMar\n14\nMar\n15\n"
+        "---IMAGE BREAK---\n"
+        "6:00 PM - 10:00 PM [4:00]\n0660 Store 026 - Plumbing & Bath Associate\n"
+        "Mar\n12\nMar\n13\nMar\n14\nMar\n15"
+    )
+
+    def test_detects_real_production_case(self):
+        with pytest.raises(AmbiguousPhotoBoundaryError):
+            _check_for_orphaned_photo_boundary(self.REAL_ORPHAN_CASE, 2)
+
+    def test_error_message_tells_user_to_retake_with_overlap(self):
+        with pytest.raises(AmbiguousPhotoBoundaryError, match="retake"):
+            _check_for_orphaned_photo_boundary(self.REAL_ORPHAN_CASE, 2)
+
+    def test_well_overlapped_photos_pass(self):
+        """Each photo starting with its own proper date label -- the
+        good case -- must never trigger this."""
+        good = (
+            "Mar\n2\n6:00 PM - 10:00 PM [4:00]\n0660 - Store 026 - Plumbing & Bath Associate\n"
+            "---IMAGE BREAK---\n"
+            "Mar\n9\n6:00 PM - 10:00 PM [4:00]\n0660 - Store 026 - Plumbing & Bath Associate"
+        )
+        _check_for_orphaned_photo_boundary(good, 2)  # should not raise
+
+    def test_single_image_never_triggers(self):
+        """No boundary exists with only one photo, regardless of content."""
+        _check_for_orphaned_photo_boundary(
+            "6:00 PM - 10:00 PM [4:00]\nsome shift details", 1)  # should not raise
+
+    def test_orphan_in_first_image_is_not_flagged(self):
+        """The first photo has no 'previous photo' to have split from --
+        content at its very start is just how the document starts, not
+        evidence of a boundary problem."""
+        text = (
+            "6:00 PM - 10:00 PM [4:00]\n0660 - Store 026\n"
+            "---IMAGE BREAK---\n"
+            "Mar\n9\n6:00 PM - 10:00 PM [4:00]\n0660 - Store 026"
+        )
+        _check_for_orphaned_photo_boundary(text, 2)  # should not raise
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_parse_images_via_transcription_surfaces_the_error(self, mock_client):
+        """The specific error must propagate out of the public entry
+        point, not get swallowed into a generic 'no events found' by the
+        broader exception handling around the transcription call."""
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(self.REAL_ORPHAN_CASE)
+
+        with pytest.raises(AmbiguousPhotoBoundaryError):
+            parse_images_via_transcription([
+                (FAKE_JPEG_BYTES, "image/jpeg"), (FAKE_JPEG_BYTES, "image/jpeg")
+            ])
 
 
 class TestShiftDateSortKey:
