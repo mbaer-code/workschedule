@@ -121,6 +121,7 @@ def _get_document_context(text: str) -> dict:
         response = _client().messages.create(
             model=MODEL,
             max_tokens=512,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = response.content[0].text.strip()
@@ -192,6 +193,7 @@ def _extract_events(text: str, context: dict) -> list:
         response = _client().messages.create(
             model=MODEL,
             max_tokens=8192,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = response.content[0].text.strip()
@@ -358,6 +360,7 @@ def _get_context_and_events_from_images(images: list) -> dict:
         response = _client().messages.create(
             model=MODEL,
             max_tokens=2048,
+            temperature=0,
             messages=[{"role": "user", "content": content}],
         )
         raw = response.content[0].text.strip()
@@ -414,6 +417,113 @@ def parse_image_with_summary(image_bytes: bytes, media_type: str = "image/jpeg")
         logger.warning("[pdf_parser] No image bytes to parse")
         return [], ""
     return parse_images_with_summary([(image_bytes, media_type)])
+
+
+# ---------------------------------------------------------------------------
+# Transcribe-then-extract: the actual entry point the route uses (see
+# parse_images_via_transcription docstring for why this exists instead of
+# calling parse_images_with_summary directly).
+# ---------------------------------------------------------------------------
+
+TRANSCRIBE_PROMPT = """Transcribe ALL text visible in this image, exactly as it appears. Preserve the original line breaks and reading order (top to bottom, left to right) as faithfully as you can — this is a literal transcription task, not a summary.
+
+Do not interpret, reformat, merge lines together, or omit anything you can read. In particular: if a date is split across two separate lines in the image (e.g. a month abbreviation like "Mar" on its own line, then a day number like "8" on the very next line, with any details for that date below), transcribe those as two separate lines, in that same order — do not combine them onto one line or reorder them.
+
+If any text is not clearly legible, write [illegible] on that line rather than guessing what it might say. Do not invent, complete, or infer any text you cannot actually read.
+
+Output ONLY the transcribed text — no commentary, no markdown formatting, no explanation, nothing before or after it."""
+
+MULTI_IMAGE_TRANSCRIBE_PROMPT = """Transcribe ALL text visible in each of the {n} images below, exactly as it appears in each one. Preserve each image's original line breaks and reading order (top to bottom, left to right) as faithfully as you can — this is a literal transcription task, not a summary.
+
+Do not interpret, reformat, merge lines together, or omit anything you can read. In particular: if a date is split across two separate lines within an image (e.g. a month abbreviation like "Mar" on its own line, then a day number like "8" on the very next line, with any details for that date below), transcribe those as two separate lines, in that same order — do not combine them onto one line or reorder them.
+
+If any text in an image is not clearly legible, write [illegible] on that line rather than guessing what it might say. Do not invent, complete, or infer any text you cannot actually read.
+
+Output each image's transcription in order, separated by a line containing exactly: ---IMAGE BREAK---
+
+Output ONLY the transcribed text and image-break markers — no commentary, no markdown formatting, no explanation, nothing before or after it."""
+
+
+def _transcribe_images_to_text(images: list) -> str:
+    """
+    Pure OCR-style transcription of 1+ images -- deliberately asks for
+    NOTHING except faithful text transcription, no date/event reasoning
+    at all. One vision call regardless of image count.
+
+    This exists because direct single-shot vision extraction (see
+    _get_context_and_events_from_images / parse_images_with_summary
+    above) proved unreliable specifically at pairing a shift with its
+    correct date on this document's split-label layout (month on one
+    line, day number on the next) — real testing produced four different
+    wrong date pairings across four uploads of the exact same unchanged
+    photo. That's the same structural fragility _collapse_split_date_labels
+    was built to eliminate deterministically for the PDF text path.
+
+    Rather than trying to prompt-engineer the vision model into doing
+    that fragile spatial pairing reliably (three prior attempts this
+    session had a mixed track record), this asks the vision model to do
+    only what vision models are reliably good at -- reading text off an
+    image -- and hands the fragile pairing problem to the same proven,
+    deterministic code the PDF path already uses.
+    """
+    content = []
+    for image_bytes, media_type in images:
+        b64_data = base64.standard_b64encode(image_bytes).decode("utf-8")
+        content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": b64_data,
+            },
+        })
+
+    if len(images) == 1:
+        prompt = TRANSCRIBE_PROMPT
+    else:
+        prompt = MULTI_IMAGE_TRANSCRIBE_PROMPT.format(n=len(images))
+    content.append({"type": "text", "text": prompt})
+
+    response = _client().messages.create(
+        model=MODEL,
+        max_tokens=4096,
+        temperature=0,
+        messages=[{"role": "user", "content": content}],
+    )
+    raw = response.content[0].text.strip()
+    logger.info(f"[pdf_parser] Transcribed {len(images)} image(s), "
+                f"{len(raw)} chars of text")
+
+    # Multiple images: drop the break markers and just concatenate --
+    # _collapse_split_date_labels processes date-label pairs positionally
+    # within the combined text regardless of which image contributed
+    # which chunk, since each image's own content is self-contained.
+    return raw.replace("---IMAGE BREAK---", "\n")
+
+
+def parse_images_via_transcription(images: list) -> tuple:
+    """
+    THE ACTUAL ENTRY POINT schedule.py calls for photo uploads (see this
+    module's docstring at _transcribe_images_to_text for why). Transcribes
+    the image(s) to plain text, then runs that text through the exact same
+    parse_document_with_summary() pipeline the PDF path uses — including
+    _collapse_split_date_labels(), already verified correct against a real
+    document. 3 API calls total (1 transcription + 2 for the text pipeline)
+    versus 1 for direct vision extraction — a deliberate accuracy-over-cost
+    tradeoff given the direct approach's demonstrated unreliability on
+    this exact failure mode.
+    """
+    if not images:
+        logger.warning("[pdf_parser] No images to parse")
+        return [], ""
+
+    try:
+        text = _transcribe_images_to_text(images)
+    except Exception as e:
+        logger.error(f"[pdf_parser] Image transcription failed: {e}")
+        return [], ""
+
+    return parse_document_with_summary(text)
 
 
 # ---------------------------------------------------------------------------

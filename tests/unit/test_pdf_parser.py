@@ -19,6 +19,8 @@ from workschedule.services.pdf_parser import (
     get_document_summary,
     parse_image_with_summary,
     parse_images_with_summary,
+    parse_images_via_transcription,
+    _transcribe_images_to_text,
     shift_date_sort_key,
     _collapse_split_date_labels,
     _is_valid_date,
@@ -554,6 +556,97 @@ class TestParseImagesMulti:
 
         assert len(events) == 1
         assert client.messages.create.call_count == 1
+
+
+class TestParseImagesViaTranscription:
+    """
+    The actual entry point schedule.py calls for photo uploads. Built
+    after real testing found direct single-shot vision extraction
+    (TestParseImagesMulti above) produced four different wrong date
+    pairings across four uploads of the exact same unchanged photo of
+    the Workforce Tools schedule's split-label date layout. This
+    approach transcribes the image to plain text (a task vision models
+    are reliably good at) and hands the fragile date-pairing problem to
+    the same deterministic _collapse_split_date_labels() pipeline
+    already proven correct against a real document.
+    """
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_transcribe_then_parse_full_pipeline(self, mock_client):
+        """
+        The core claim this whole approach rests on: if the vision model
+        transcribes the image faithfully (including the split-label date
+        layout, exactly as PyMuPDF's real extraction of this document
+        does), the existing proven text pipeline produces the correct
+        result -- reusing the same fixture text this session's PDF-path
+        regression test already verified end-to-end.
+        """
+        client = MagicMock()
+        mock_client.return_value = client
+
+        transcribed_text = (
+            "Mar 2 - 8 12:00 hours\n"
+            "Mar\n2\n6:00 PM - 10:00 PM [4:00]\n0660 - Store 026 - Plumbing & Bath Associate\n"
+            "Mar\n3\n6:00 PM - 10:00 PM [4:00]\n0660 - Store 026 - Plumbing & Bath Associate\n"
+            "Mar\n4\nMar\n5\nMar\n6\nMar\n7\n"
+            "Mar\n8\n4:00 PM - 8:00 PM [4:00]\n0660 - Store 026 - Plumbing & Bath Associate\n"
+        )
+        expected_events = [
+            {"shift_date": "Mon, Mar 02", "shift_start": "6:00 PM", "shift_end": "10:00 PM",
+             "department": "Plumbing & Bath Associate", "store_number": "0660"},
+            {"shift_date": "Tue, Mar 03", "shift_start": "6:00 PM", "shift_end": "10:00 PM",
+             "department": "Plumbing & Bath Associate", "store_number": "0660"},
+            {"shift_date": "Sun, Mar 08", "shift_start": "4:00 PM", "shift_end": "8:00 PM",
+             "department": "Plumbing & Bath Associate", "store_number": "0660"},
+        ]
+        # First call: transcription. Then context pass, then extraction
+        # pass (parse_document_with_summary's normal 2-call sequence).
+        client.messages.create.side_effect = [
+            _mock_response(transcribed_text),
+            _mock_response(json.dumps(MOCK_CONTEXT)),
+            _mock_response(json.dumps(expected_events)),
+        ]
+
+        events, summary = parse_images_via_transcription([(FAKE_JPEG_BYTES, "image/jpeg")])
+
+        assert client.messages.create.call_count == 3
+        dates = [e['shift_date'] for e in events]
+        assert dates == ['Mon, Mar 02', 'Tue, Mar 03', 'Sun, Mar 08']
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_transcription_call_uses_temperature_zero(self, mock_client):
+        """Determinism matters here specifically -- real testing showed
+        the same unmodified photo producing different wrong answers
+        across repeated uploads."""
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response("some text")
+
+        _transcribe_images_to_text([(FAKE_JPEG_BYTES, "image/jpeg")])
+
+        assert client.messages.create.call_args.kwargs['temperature'] == 0
+
+    @patch('workschedule.services.pdf_parser._client')
+    def test_multi_image_transcription_strips_break_markers(self, mock_client):
+        client = MagicMock()
+        mock_client.return_value = client
+        client.messages.create.return_value = _mock_response(
+            "page one text\n---IMAGE BREAK---\npage two text"
+        )
+
+        text = _transcribe_images_to_text([
+            (FAKE_JPEG_BYTES, "image/jpeg"), (FAKE_JPEG_BYTES, "image/jpeg")
+        ])
+
+        assert "---IMAGE BREAK---" not in text
+        assert "page one text" in text
+        assert "page two text" in text
+
+    def test_empty_list_returns_empty_no_api_call(self):
+        with patch('workschedule.services.pdf_parser._client') as mock_client:
+            events, summary = parse_images_via_transcription([])
+            assert events == []
+            mock_client.assert_not_called()
 
 
 class TestShiftDateSortKey:

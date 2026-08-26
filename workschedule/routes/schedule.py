@@ -20,7 +20,7 @@ from workschedule.services.security import check_upload, check_upload_batch, che
 from workschedule.services.parser_limits import limits
 from workschedule.services.pdf_parser import (
     parse_document_with_summary,
-    parse_images_with_summary,
+    parse_images_via_transcription,
     shift_date_sort_key,
 )
 
@@ -284,7 +284,7 @@ def upload_pdf():
 
             # Single vision call across all images returns both events and
             # summary (1 API call regardless of how many photos were sent)
-            parsed_entries, doc_summary = parse_images_with_summary(processed_images)
+            parsed_entries, doc_summary = parse_images_via_transcription(processed_images)
             logger.info(
                 f"[upload_pdf] Image document detected ({len(processed_images)} "
                 f"photo(s)): {doc_summary}")
