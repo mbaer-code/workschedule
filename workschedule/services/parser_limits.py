@@ -122,6 +122,32 @@ class ParserLimits:
         default_factory=lambda: int(os.getenv("MAX_IMAGE_DIMENSION", "2000"))
     )
 
+    # Photo/vision upload feature flag. OFF by default (PDF-only) as of
+    # August 2026 -- real testing found the vision-read step produces
+    # confident, well-formatted, repeatable fabricated shift entries on
+    # otherwise-clean single photos (e.g. a nonexistent shift inserted
+    # between two real ones, identical across 3 separate uploads of the
+    # same unmodified file), with no structural signature available to
+    # detect it in code -- unlike every other bug found this session
+    # (date-pairing, photo-boundary gaps, weekday computation), which all
+    # had a checkable pattern and got fixed for real. A fabricated
+    # calendar entry that's indistinguishable from a real one fails this
+    # product's own bar (a wrong entry causes real trouble; a missing one
+    # just means a double-check) in a way no code-level fix here closes.
+    #
+    # The PDF/text path is unaffected and fully verified -- this flag
+    # only gates the photo/camera upload path. All the multi-photo
+    # infrastructure (accumulation UI, IndexedDB persistence, boundary
+    # detection, the transcribe-then-collapse pipeline) stays in place,
+    # tested and ready, for whenever a future model generation (or a
+    # different vision approach, e.g. traditional non-generative OCR
+    # feeding the same proven pipeline) clears this bar. Re-enable with
+    # PHOTO_UPLOAD_ENABLED=true once that's actually verified true again
+    # with real repeated testing -- not just flipped back on.
+    photo_upload_enabled: bool = field(
+        default_factory=lambda: os.getenv("PHOTO_UPLOAD_ENABLED", "false").lower() == "true"
+    )
+
     # Multiple photos of the same document (e.g. multi-page schedule, or
     # a schedule app screen that needed several scrolled screenshots) can
     # be uploaded together and merged in one vision call. Capped at 5 —

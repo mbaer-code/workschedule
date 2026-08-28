@@ -214,7 +214,10 @@ def prepare_image_for_ai(image_bytes: bytes) -> bytes:
 
 @schedule_bp.route("/upload", methods=["GET"])
 def upload_schedule():
-    return render_template("upload_schedule_new.html")
+    return render_template(
+        "upload_schedule_new.html",
+        photo_upload_enabled=limits.photo_upload_enabled,
+    )
 
 
 @schedule_bp.route('/upload_pdf', methods=['POST'])
@@ -233,6 +236,7 @@ def upload_pdf():
         )
         return render_template(
             "upload_schedule_new.html",
+            photo_upload_enabled=limits.photo_upload_enabled,
             pdf_error=(
                 "Your file didn't upload. If it's a photo from your library, "
                 "wait a moment for it to fully download from iCloud/cloud "
@@ -250,6 +254,7 @@ def upload_pdf():
         logger.error(f"[upload_pdf] Error reading uploaded file bytes: {e}")
         return render_template(
             "upload_schedule_new.html",
+            photo_upload_enabled=limits.photo_upload_enabled,
             pdf_error=(
                 "We couldn't read your file -- the upload may have been "
                 "interrupted. Please try again."
@@ -268,9 +273,27 @@ def upload_pdf():
         )
     except SecurityError as e:
         logger.warning(f"[upload_pdf] Security check failed: {e}")
-        return render_template("upload_schedule_new.html", pdf_error=str(e))
+        return render_template(
+            "upload_schedule_new.html",
+            photo_upload_enabled=limits.photo_upload_enabled,
+            pdf_error=str(e),
+        )
 
     kind = kinds[0]  # check_upload_batch already rejected mixed pdf+image batches
+
+    if kind == "image" and not limits.photo_upload_enabled:
+        # Photo/vision upload is disabled -- see photo_upload_enabled's
+        # docstring in parser_limits.py for why. No AI call made; this is
+        # a clean, immediate rejection like any other security-gate check.
+        logger.info("[upload_pdf] Rejected image upload -- photo_upload_enabled is off")
+        return render_template(
+            "upload_schedule_new.html",
+            photo_upload_enabled=limits.photo_upload_enabled,
+            pdf_error=(
+                "Photo upload is temporarily unavailable while we improve its "
+                "accuracy. Please upload a PDF of your schedule instead."
+            ),
+        )
 
     try:
         if kind == "image":
@@ -280,7 +303,11 @@ def upload_pdf():
                     processed_images.append(
                         (prepare_image_for_ai(file_bytes), "image/jpeg"))
                 except ValueError as e:
-                    return render_template("upload_schedule_new.html", pdf_error=str(e))
+                    return render_template(
+                        "upload_schedule_new.html",
+                        photo_upload_enabled=limits.photo_upload_enabled,
+                        pdf_error=str(e),
+                    )
 
             # Single vision call across all images returns both events and
             # summary (1 API call regardless of how many photos were sent)

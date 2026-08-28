@@ -106,7 +106,16 @@
                  one-at-a-time camera shots (each "Take Photo" only ever
                  returns a single image) up to MAX_PHOTOS, and rebuilds this
                  input's FileList before submit so the plain form POST still
-                 carries every accumulated photo under the same field name. -->
+                 carries every accumulated photo under the same field name.
+
+                 Photo upload is gated behind photo_upload_enabled (see its
+                 docstring in parser_limits.py) -- real testing found the
+                 vision-read step fabricates plausible-looking shift entries
+                 with no way to detect it in code. PDF-only until a future
+                 model generation (or a different vision approach) actually
+                 clears that bar again, verified with real testing, not just
+                 flipped back on. -->
+            {% if photo_upload_enabled %}
             <div class="custom-file-input" id="drop-zone">
                 <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf,image/png,image/jpeg,image/heic,image/heif" multiple>
                 <span class="custom-file-input-text" id="file-input-label">Click or drag a PDF or photo of your schedule here</span>
@@ -120,6 +129,15 @@
             <p id="photo-hint" class="hidden text-xs text-gray-400">
                 Multiple pages or screens of the same schedule? Tap above to add more.
             </p>
+            {% else %}
+            <div class="custom-file-input" id="drop-zone">
+                <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf">
+                <span class="custom-file-input-text" id="file-input-label">Click or drag a PDF of your schedule here</span>
+            </div>
+            <p class="text-xs text-gray-400">
+                Photo upload is temporarily unavailable while we improve its accuracy &mdash; PDF uploads work as usual.
+            </p>
+            {% endif %}
 
             {% if pdf_error %}
             <div class="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-3">
@@ -184,6 +202,7 @@
         });
 
         // --- File input: accumulate up to MAX_PHOTOS photos, or one PDF ---
+        {% if photo_upload_enabled %}
         // Mobile camera capture only ever returns one photo per "Take
         // Photo" tap, even with `multiple` set on the input -- that's a
         // browser/OS limitation, not something an attribute fixes. So we
@@ -443,6 +462,19 @@
             // before the browser navigates away.
             dbClearPhotos().catch(err => console.error(err));
         });
+        {% else %}
+        // Photo upload disabled -- plain single-PDF input, no accumulation,
+        // no IndexedDB, none of the multi-photo machinery above is needed.
+        const fileInput = document.getElementById('pdfFile');
+        const jsErrorEl = document.getElementById('js-error');
+        document.getElementById('upload-form').addEventListener('submit', (e) => {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                jsErrorEl.textContent = 'Please select a PDF to upload.';
+                jsErrorEl.classList.remove('hidden');
+            }
+        });
+        {% endif %}
     </script>
 </body>
 </html>
