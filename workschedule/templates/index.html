@@ -15,6 +15,54 @@
     <meta property="og:description" content="The fastest way to put your schedule on your calendar &mdash; no account needed. Upload a schedule PDF and get a calendar file in seconds. Just $4.">
     {% endif %}
     <meta property="og:type" content="website">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Do I need to create an account?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. There's no login, no password, and no email address required. Upload your schedule, review the result, and pay once."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Will I be charged automatically, or signed up for a subscription?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. It's a single flat $4 charge for your calendar file -- no subscription, no recurring billing, and no card kept on file afterward."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What if my schedule isn't read correctly?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You review every date and time found before you pay anything -- nothing is charged until you approve what's shown."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What happens to my file after I download my calendar?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It's deleted right after you download your .ics file. There are no copies kept and no profile built from what you upload."
+          }
+        }{% if not photo_upload_enabled %},
+        {
+          "@type": "Question",
+          "name": "What file formats are supported?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PDF only, for now."
+          }
+        }{% endif %}
+      ]
+    }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -110,6 +158,39 @@
                                 Financial infrastructure is entirely handled securely via Stripe, the same industry-leading payment processor trusted by companies large and small. Because we hold no data on our site, your personal information is never aggregated, profile-built, or sold to third-party marketing entities.
                             </p>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FAQ Section -->
+            <section id="faq" class="py-20 bg-white">
+                <div class="container mx-auto px-6 max-w-3xl">
+                    <div class="text-center mb-12">
+                        <h2 class="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Common Questions</h2>
+                    </div>
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="font-bold text-slate-900 mb-1">Do I need to create an account?</h3>
+                            <p class="text-sm text-slate-600 leading-relaxed">No. There's no login, no password, and no email address required. Upload your schedule, review the result, and pay once.</p>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-900 mb-1">Will I be charged automatically, or signed up for a subscription?</h3>
+                            <p class="text-sm text-slate-600 leading-relaxed">No. It's a single flat $4 charge for your calendar file &mdash; no subscription, no recurring billing, and no card kept on file afterward.</p>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-900 mb-1">What if my schedule isn't read correctly?</h3>
+                            <p class="text-sm text-slate-600 leading-relaxed">You review every date and time we found before you pay anything &mdash; nothing is charged until you approve what's shown.</p>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-900 mb-1">What happens to my file after I download my calendar?</h3>
+                            <p class="text-sm text-slate-600 leading-relaxed">It's deleted right after you download your .ics file. We don't keep copies or build a profile from what you upload.</p>
+                        </div>
+                        {% if not photo_upload_enabled %}
+                        <div>
+                            <h3 class="font-bold text-slate-900 mb-1">What file formats are supported?</h3>
+                            <p class="text-sm text-slate-600 leading-relaxed">PDF only, for now.</p>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </section>
