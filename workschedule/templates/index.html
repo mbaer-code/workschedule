@@ -3,10 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% if photo_upload_enabled %}
     <title>MySchedule.cloud &mdash; Turn Any Schedule Photo or PDF into a Calendar File</title>
     <meta name="description" content="Snap a photo or upload a schedule PDF. Get a calendar file for your phone in seconds. No account needed, just $4.">
     <meta property="og:title" content="MySchedule.cloud &mdash; Turn Any Schedule Photo or PDF into a Calendar File">
     <meta property="og:description" content="Snap a photo or upload a schedule PDF. Get a calendar file for your phone in seconds. No account needed, just $4.">
+    {% else %}
+    <title>MySchedule.cloud &mdash; Turn Any Schedule PDF into a Calendar File</title>
+    <meta name="description" content="Upload a schedule PDF. Get a calendar file for your phone in seconds. No account needed, just $4.">
+    <meta property="og:title" content="MySchedule.cloud &mdash; Turn Any Schedule PDF into a Calendar File">
+    <meta property="og:description" content="Upload a schedule PDF. Get a calendar file for your phone in seconds. No account needed, just $4.">
+    {% endif %}
     <meta property="og:type" content="website">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,7 +36,7 @@
             <div class="flex items-center space-x-6">
                 <a href="#about-us" class="text-sm font-medium text-slate-600 hover:text-sky-600 transition-colors">About</a>
                 <a href="/schedule/upload" class="bg-sky-600 text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-sky-700 transition-all shadow-sm hover:shadow">
-                    Upload or Take Photo
+                    {% if photo_upload_enabled %}Upload or Take Photo{% else %}Upload Your Schedule{% endif %}
                 </a>
             </div>
         </nav>
@@ -46,15 +53,21 @@
                         Drop a schedule into a calendar
                     </h1>
                     <p class="text-lg md:text-xl font-normal leading-relaxed text-sky-50 mb-8 max-w-2xl mx-auto">
+                        {% if photo_upload_enabled %}
                         Snap a photo of a printed schedule, upload a screenshot, or drop in a document. We find every date and time and turn them into a standard <code class="bg-sky-800/60 px-2 py-0.5 rounded font-mono text-sm border border-sky-500/30">.ics</code> file of calendar entries &mdash; ready to sync straight to your iPhone, Android, or Google Calendar.
+                        {% else %}
+                        Upload a schedule PDF and we find every date and time, turning them into a standard <code class="bg-sky-800/60 px-2 py-0.5 rounded font-mono text-sm border border-sky-500/30">.ics</code> file of calendar entries &mdash; ready to sync straight to your iPhone, Android, or Google Calendar.
+                        {% endif %}
                     </p>
                     
                     <!-- Formats Badge Row -->
                     <div class="flex flex-wrap justify-center gap-2 mb-8 max-w-lg mx-auto text-xs font-mono text-sky-200">
+                        {% if photo_upload_enabled %}
                         <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">Direct Camera Photo</span>
                         <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">HEIC (iPhone)</span>
                         <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">JPEG / JPG</span>
                         <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">PNG</span>
+                        {% endif %}
                         <span class="bg-sky-800/50 px-2.5 py-1 rounded-md border border-sky-500/20">PDF</span>
                     </div>
 
@@ -82,7 +95,11 @@
                                 Stateless Processing
                             </h3>
                             <p class="text-sm text-slate-600 leading-relaxed">
+                                {% if photo_upload_enabled %}
                                 Photos and files pass through temporary cloud storage just long enough to generate your calendar &mdash; then they're vaporized the moment you download the .ics file to your device. We don't have user accounts and don't save copies of anything you upload.
+                                {% else %}
+                                Your files pass through temporary cloud storage just long enough to generate your calendar &mdash; then they're vaporized the moment you download the .ics file to your device. We don't have user accounts and don't save copies of anything you upload.
+                                {% endif %}
                             </p>
                         </div>
                         <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200/40">
@@ -102,7 +119,11 @@
                 <div class="container mx-auto px-6 max-w-2xl">
                     <h2 class="text-3xl md:text-4xl font-bold mb-4 tracking-tight">Ready to sync your schedule?</h2>
                     <p class="text-lg text-sky-100 mb-8 leading-relaxed">
+                        {% if photo_upload_enabled %}
                         Snap a picture or upload a file right now and be done with adding to your calendar by hand.
+                        {% else %}
+                        Upload your schedule PDF right now and be done with adding to your calendar by hand.
+                        {% endif %}
                     </p>
                     <a href="/schedule/upload" class="inline-block bg-white text-sky-600 font-bold py-3.5 px-8 rounded-full shadow-lg hover:bg-slate-50 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
                         Get Your Calendar

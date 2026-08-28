@@ -6,6 +6,8 @@ from flask import Flask, request, redirect, url_for, flash, render_template
 from google.cloud import storage
 from werkzeug.utils import secure_filename
 
+from workschedule.services.parser_limits import limits
+
 from dotenv import load_dotenv
 import logging
 
@@ -61,7 +63,10 @@ def create_app():
     @app.route('/')
     @app.route('/index')
     def index():
-        return render_template('index.html')
+        return render_template(
+            'index.html',
+            photo_upload_enabled=limits.photo_upload_enabled,
+        )
 
     return app
 
