@@ -114,7 +114,7 @@ _rate_limiter = _RateLimiter()
 # File-level checks
 # ---------------------------------------------------------------------------
 
-_ACCEPT_MSG = "Only PDF files or PNG/JPEG photos are accepted."
+_ACCEPT_MSG = "Only PDF files are accepted."
 
 
 def _check_extension(filename: str):
