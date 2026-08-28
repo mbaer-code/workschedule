@@ -468,7 +468,17 @@
         // Photo upload disabled -- plain single-PDF input, no accumulation,
         // no IndexedDB, none of the multi-photo machinery above is needed.
         const fileInput = document.getElementById('pdfFile');
+        const fileInputLabel = document.getElementById('file-input-label');
         const jsErrorEl = document.getElementById('js-error');
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                fileInputLabel.textContent = e.target.files[0].name;
+                fileInput.parentNode.style.borderColor = '#0ea5e9';
+            } else {
+                fileInputLabel.textContent = 'Click or drag a PDF of your schedule here';
+                fileInput.parentNode.style.borderColor = '#ccc';
+            }
+        });
         document.getElementById('upload-form').addEventListener('submit', (e) => {
             if (!fileInput.files || fileInput.files.length === 0) {
                 e.preventDefault();
