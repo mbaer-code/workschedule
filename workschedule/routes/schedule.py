@@ -289,10 +289,7 @@ def upload_pdf():
         return render_template(
             "upload_schedule_new.html",
             photo_upload_enabled=limits.photo_upload_enabled,
-            pdf_error=(
-                "Photo upload is temporarily unavailable while we improve its "
-                "accuracy. Please upload a PDF of your schedule instead."
-            ),
+            pdf_error="Image files are unsupported. PDF format only.",
         )
 
     try:
